@@ -1,0 +1,369 @@
+##
+finetune\preprocess_clang_cxx.py
+последняя рабочая версия
+
+finetune\preprocess_clang_cxx_1.py
+попытка добавить комментарии
+
+finetune\preprocess_clang_cxx_2.py
+промежуточная рабочая версия
+
+
+##
+finetune\fine_tune_qwen3.py
+последняя рабочая версия 
+
+finetune\fine_tune_qwen3-v1.py
+попытка дополнительной оптимизации промта
+
+Проблемы:
+1. возникла проблема с извлечением комментариев, 
+неудается сопоставить комментарий и то к чему он отностися.
+ну то есть обычно комментарий находится либо перед участком комментируемого кода,
+либо сразу после него в той же строке через //
+либо может быть после кода.
+
+есть отдельный случай - doc-стринги. Про них известно, что они находятся перед комментируемым классом или функцией.
+
+можно сделать несколько проходов - сперва изъять комменты и попытаться извлечь то к чему они отностяся из следюущего курсора
+потом пройти и извлечь все объекты
+потом сопоставить объектам док-стринги
+
+2. не смог извлечь код методов для шаблонных классов, так как clang не считает их определёнными до компиляции
+и курсор указывает только на заголовок функции, а для последюущего блока с {} похоже даже не заготовили курсора.
+
+можно парсить файл в поисках скбок: {}
+
+однако, надо ограничить область поиска.
+
+Для текущего курсора необходимо найти позицию в этом же файле следюущего брата на том же уровне иерархии. 
+Если на данном уровне все кончились, надо подняться на уровень выше и снова поискать позицию следюущего
+в пределах данного файла. Искать пока не будет найдена позиция или не кончится иерархия.
+
+В итоге при подъёме по иерархии курсор улетает в класс, а не в слудующий элемент.
+
+3.
+
+
+
+
+
+Задача организовать датасет для дообучения локальной LLM с использованием LoRA на основе кодовой базы на C++.
+цель для модели:
+Рефакторинг/анализ/документирование C++ кода
+код представляет собой git-репозиторий большого проекта с большим количеством файлов и папок, расположен локально.
+Скрипт извлекает классы и функции.
+может стоит ещё извлекать и добавить к датасету код функций, методов и объявления классов?
+
+
+Вот скрипт для разбора кодовой базы на С++ для формирования датасета с целью обучать LLM
+Как добавить выделение комментариев и док-стрингов?
+
+
+Привет! Вот код для разбора кодовой базы на С++ для формирования датасета с целью обучать LLM. 
+Добавь в него 
+Шаблоны классов
+Пространства имён (namespaces)
+Директивы препроцессора (#ifdef, #pragma и др.)
+Пользовательские литералы
+Атрибуты (C++11 и новее)
+
+
+
+Видны ошибки генерации, например, док.строки не привязаны к методам и постоянно вставляет //comment inside method везде.
+
+
+
+Вот пример обрабатывамой кодовой базы:
+файл BasicDevice.h содержит
+
+// BasicDevice.h
+
+#ifndef BASICDEVICE_H_
+#define BASICDEVICE_H_
+
+#include <iostream>
+
+//standalone comment
+/*multi
+line
+comment*/
+
+class A {
+public:
+    void foo_A();
+    void bar_A();
+};
+
+class B {
+public:
+    void foo_B() {
+        //comment inside method
+        std::cout << "Method foo_B called" << std::endl;
+    }
+
+    void bar_B() {
+        std::cout << "Method bar_B called" << std::endl;
+    }
+};
+
+#endif // BASICDEVICE_H_
+файл BasicDevice.cpp"
+содержит:
+// BasicDevice.cpp
+
+#include "BasicDevice.h"
+
+/**
+ * @brief Выполняет метод foo_A класса A.
+ * 
+ * Этот метод выводит сообщение о том, что он был вызван.
+ * Может быть использован для демонстрации работы класса A.
+ */
+void A::foo_A() {
+    std::cout << "Method foo_A called" << std::endl;
+}
+
+/**
+ * @brief Выполняет метод bar_A класса A.
+ * 
+ * Данный метод выводит сообщение о своем вызове.
+ * Предназначен для тестирования или демонстрации функциональности класса A.
+ */
+void A::bar_A() {
+    std::cout << "Method bar_A called" << std::endl;
+}
+файл main.cpp содержит:
+
+#include "BasicDevice.h"
+
+int main(int argc, char *argv[])
+{
+    A a;
+    B b;
+    a.foo_A();
+    a.bar_A();
+    b.foo_B();
+    b.bar_B();
+}
+
+
+
+Привет! Есть скрипт для разбора кодовой базы на С++ для формирования датасета с целью обучать LLM.
+Напиши скрипт, который преобразует получившейся json-файл в json файл пригодный для использования для LoRA дообучения.
+В качестве Input должен быт текст на основе поля "type" вида input : "Implement function/methods/class и так далее для всех типов with name (имя из json)", 
+а в качестве output - код.
+Вот текст исходного скрипта:
+
+Вот анализируемый код, скрипт не находит ни одного класса и метода
+#ifndef CLASSES_H
+#define CLASSES_H
+
+#include <iostream>
+
+//standalone comment
+/*multi
+line
+comment*/
+
+class A {
+public:
+    void foo_A();
+    void bar_A();
+};
+
+class B {
+public:
+    void foo_B() {
+        //comment inside method
+        std::cout << "Method foo_B called" << std::endl;
+    }
+
+    void bar_B() {
+        std::cout << "Method bar_B called" << std::endl;
+    }
+};
+
+#endif // CLASSES_H
+файл BasicDevice.cpp"
+содержит
+/// classes.cpp
+
+#include "BasicDevice.h"
+
+/**
+ * @brief Выполняет метод foo_A класса A.
+ * 
+ * Этот метод выводит сообщение о том, что он был вызван.
+ * Может быть использован для демонстрации работы класса A.
+ */
+void A::foo_A() {
+    std::cout << "Method foo_A called" << std::endl;
+}
+
+/**
+ * @brief Выполняет метод bar_A класса A.
+ * 
+ * Данный метод выводит сообщение о своем вызове.
+ * Предназначен для тестирования или демонстрации функциональности класса A.
+ */
+void A::bar_A() {
+    std::cout << "Method bar_A called" << std::endl;
+}
+
+А вот итоговый датасет:
+{
+  "type": "class",
+  "name": "A",
+  "code": "class A {\npublic:\n    void foo_A();\n    void bar_A();\n};",
+  "documentation": null,
+  "location": "BasicDevice.h",
+  "line": 13,
+  "context": null,
+  "methods": [
+    {
+      "type": "method",
+      "name": "foo_A",
+      "code": "    void foo_A();",
+      "documentation": null,
+      "location": "BasicDevice.h",
+      "line": 15,
+      "context": "A",
+      "parameters": [],
+      "return_type": "void"
+    },
+    {
+      "type": "method",
+      "name": "bar_A",
+      "code": "    void bar_A();",
+      "documentation": null,
+      "location": "BasicDevice.h",
+      "line": 16,
+      "context": "A",
+      "parameters": [],
+      "return_type": "void"
+    },
+    {
+      "type": "method",
+      "name": "foo_A",
+      "code": "void A::foo_A() {\n    std::cout << \"Method foo_A called\" << std::endl;\n}",
+      "documentation": null,
+      "location": "BasicDevice.cpp",
+      "line": 11,
+      "context": "A",
+      "parameters": [],
+      "return_type": "void"
+    },
+    {
+      "type": "method",
+      "name": "bar_A",
+      "code": "void A::bar_A() {\n    std::cout << \"Method bar_A called\" << std::endl;\n}",
+      "documentation": null,
+      "location": "BasicDevice.cpp",
+      "line": 21,
+      "context": "A",
+      "parameters": [],
+      "return_type": "void"
+    }
+  ],
+  "template_parameters": []
+}
+{
+  "type": "class",
+  "name": "B",
+  "code": "//comment inside method\nclass B {\npublic:\n    void foo_B() {\n        //comment inside method\n        std::cout << \"Method foo_B called\" << std::endl;\n    }\n\n    void bar_B() {\n        std::cout << \"Method bar_B called\" << std::endl;\n    }\n};",
+  "documentation": null,
+  "location": "BasicDevice.h",
+  "line": 19,
+  "context": null,
+  "methods": [
+    {
+      "type": "method",
+      "name": "foo_B",
+      "code": "//comment inside method\n    void foo_B() {\n        //comment inside method\n        std::cout << \"Method foo_B called\" << std::endl;\n    }",
+      "documentation": null,
+      "location": "BasicDevice.h",
+      "line": 21,
+      "context": "B",
+      "parameters": [],
+      "return_type": "//comment inside method void"
+    },
+    {
+      "type": "method",
+      "name": "bar_B",
+      "code": "    void bar_B() {\n        std::cout << \"Method bar_B called\" << std::endl;\n    }",
+      "documentation": null,
+      "location": "BasicDevice.h",
+      "line": 26,
+      "context": "B",
+      "parameters": [],
+      "return_type": "void"
+    }
+  ],
+  "template_parameters": []
+}
+{
+  "type": "macro",
+  "name": "CLASSES_H",
+  "code": "#define CLASSES_H",
+  "documentation": null,
+  "location": "BasicDevice.h",
+  "line": 4,
+  "args": []
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.cpp",
+  "line": 1,
+  "context": null,
+  "text": "// classes.cpp"
+}
+{
+  "type": "doxygen",
+  "location": "BasicDevice.cpp",
+  "line": 5,
+  "context": null,
+  "text": "/**\r\n * @brief Выполняет метод foo_A класса A.\r\n * \r\n * Этот метод выводит сообщение о том, что он был вызван.\r\n * Может быть использован для демонстрации работы класса A.\r\n */"
+}
+{
+  "type": "doxygen",
+  "location": "BasicDevice.cpp",
+  "line": 15,
+  "context": null,
+  "text": "/**\r\n * @brief Выполняет метод bar_A класса A.\r\n * \r\n * Данный метод выводит сообщение о своем вызове.\r\n * Предназначен для тестирования или демонстрации функциональности класса A.\r\n */"
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.h",
+  "line": 22,
+  "context": null,
+  "text": "//comment inside method"
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.h",
+  "line": 1,
+  "context": null,
+  "text": "// classes.h"
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.h",
+  "line": 8,
+  "context": null,
+  "text": "//standalone comment"
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.h",
+  "line": 9,
+  "context": null,
+  "text": "/*multi\r\nline\r\ncomment*/"
+}
+{
+  "type": "inline",
+  "location": "BasicDevice.h",
+  "line": 31,
+  "context": null,
+  "text": "// CLASSES_H"
+}

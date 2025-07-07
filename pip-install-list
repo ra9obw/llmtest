@@ -1,0 +1,6 @@
+питон 3.12-что-то там, не новее
+cuda-toolkit 12.8.какой-там, не новее
+
+pip install torch torchvision torchaudio bitsandbytes --extra-index-url https://download.pytorch.org/whl/cu128
+pip install transformers datasets accelerate peft sentencepiece tokenizers tensorboard clang clang-format
+

@@ -1,0 +1,567 @@
+[
+    {
+        "id": "global_dict_adc_cfg",
+        "input": "# Task: Define global dictionary variable 'adc_cfg'",
+        "output": "adc_cfg ={\n'waveforms': OrderedDict([\n('cavityVoltage',       {'channel': 'Adc1Ch01YValue', 'scale': -1.0}),\n('feederCurr',          {'channel': 'Adc1Ch00YValue', 'scale': -1.0}),\n('incidentWave',        {'channel': 'Adc4Ch00YValue', 'scale': -1.0}),\n('reflectedWave',       {'channel': 'Adc4Ch01YValue', 'scale': -1.0}),\n('refPhase',            {'channel': 'Adc3Ch01YValue', 'scale': -20.0}),\n('rfGCLevel',           {'channel': 'Adc4Ch02YValue', 'scale': -1.0}),\n('piezoTunerVoltage',   {'channel': 'Adc4Ch03YValue', 'scale': -20.0}),\n('modulatorErrorAmp',   {'channel': 'Adc3Ch00YValue', 'scale': -1.0}),\n('rfPhaseErrorAmp',     {'channel': 'Adc2Ch01YValue', 'scale': -1.0}),\n('cavityPhaseErrorAmp', {'channel': 'Adc2Ch00YValue', 'scale': -20.0}),\n('sinPhaseShifter',     {'channel': 'Adc4Ch04YValue', 'scale': 1.0}),\n('cosPhaseShifter',     {'channel': 'Adc4Ch05YValue', 'scale': 1.0})\n])\n}"
+    },
+    {
+        "id": "global_dict_dio_cfg_patterm",
+        "input": "# Task: Define global dictionary variable 'dio_cfg_patterm'",
+        "output": "dio_cfg_patterm = {\n'interlocks':  {'bit':'int'},\n'di_bits':     {'bit':'int'},\n'di_words':    {'bit':'int', 'size':'int'},\n'do_pulsed':   {'bit':'int', 'mode':'string'},\n'do_bits':     {'bit':'int'},\n'do_words':    {'bit':'int', 'size':'int'}\n}"
+    },
+    {
+        "id": "global_dict_dio_cfg",
+        "input": "# Task: Define global dictionary variable 'dio_cfg'",
+        "output": "dio_cfg = {\n'interlocks': OrderedDict([\n('Generator',    {'bit': 2}),\n('Vacuum',       {'bit': 3}),\n('Door',         {'bit': 4}),\n('Water',        {'bit': 5}),\n('Air',          {'bit': 6}),\n('External',     {'bit': 7}),\n('Plus_6V',      {'bit': 12}),\n('Minus_6V',     {'bit': 13}),\n]),\n'di_bits': {\n'modulatorReady':  {'bit': 0},\n'modulatorIsOn':   {'bit': 1},\n'Cavity_Vmax':     {'bit': 14},\n'relayCurrCavity': {'bit': 17}\n},\n'di_words': {\n},\n'do_pulsed': {\n'modulatorOn':     {'bit': 0, 'mode': 'pulsed_100ms'},\n'clearInterlocks': {'bit': 2, 'mode': 'pulsed_500ms'}\n},\n'do_bits': {\n'modulatorOff': {'bit': 1},\n'enableAGC':    {'bit': 3}\n},\n'do_words': {\n}\n}"
+    },
+    {
+        "id": "global_dict_dac_cfg_patterm",
+        "input": "# Task: Define global dictionary variable 'dac_cfg_patterm'",
+        "output": "dac_cfg_patterm = {\n'scalar':  {'channel':'string', 'scale':'double', 'min_lim':'double', 'max_lim':'double', 'memorize':'bool'}\n}"
+    },
+    {
+        "id": "global_dict_dac_cfg",
+        "input": "# Task: Define global dictionary variable 'dac_cfg'",
+        "output": "dac_cfg = {\n'scalar': OrderedDict([\n('cavityVoltageSetpoint',   {'channel': 'voltage0A', 'scale': 1.0, 'min_lim': -10.0, 'max_lim':  0.0, 'readonly': True}),# Is set via Program Corrector\n('levelAGCSetpoint',        {'channel': 'voltage0B', 'scale': 1.0, 'min_lim': -10.0, 'max_lim':  0.0, 'readonly': True}), # Is set by Program Corrector\n('piezoTunerSetpoint',      {'channel': 'voltage0C', 'scale': 1.0, 'min_lim': -10.0, 'max_lim': 10.0, 'readonly': True}), # Is set by Program Corrector\n('sinPhaseShifterSetpoint', {'channel': 'voltage0D', 'scale': 1.0, 'min_lim': -10.0, 'max_lim': 10.0, 'readonly': True}), # Is set by Program Corrector\n('cosPhaseShifterSetpoint', {'channel': 'voltage1A', 'scale': 1.0, 'min_lim': -10.0, 'max_lim': 10.0, 'readonly': True}), # Is set by Program Corrector\n('refPhaseOffsetSetpoint',  {'channel': 'voltage1B', 'scale': 1.0, 'min_lim': -10.0, 'max_lim': 10.0, 'memorize': True}), #3 harm option\n('cavPhaseOffsetSetpoint',  {'channel': 'voltage1C', 'scale': 1.0, 'min_lim': -10.0, 'max_lim': 10.0}),\n])\n}"
+    },
+    {
+        "id": "function_update_cfg",
+        "input": "# Task: Implement function update_cfg",
+        "output": "def update_cfg(cfg_dict, csf_rules, in_cfg_list):\nif (in_cfg_list == None) | (in_cfg_list == \"\"):\nreturn\nfor item in in_cfg_list:\nif item[0] =='#':\ncontinue\nitem = item.replace(\" \", \"\")\ncfg_str = item.split(',')\nftype,fname = cfg_str[0].split(':')\nif ftype != 'type':\nprint(ftype,fname)\nprint('Error 0!')     #TODO: raise something\nif fname not in csf_rules.keys():\nprint(ftype,fname)\nprint('Error 1!')     #TODO: raise something\nttype = fname\ncfg_str.pop(0)\nftype,fname = cfg_str[0].split(':')\nif ftype != 'name':\nprint(ftype,fname)\nprint('Error 2!')     #TODO: raise something\ntname = fname\ncfg_str.pop(0)\nd = {}\nfor cfg_el in cfg_str:\nk,v = cfg_el.split(':')\nd[k] = v\nif tname not in cfg_dict[ttype].keys():\ncfg_dict[ttype][tname] = {}\nfor k,v in csf_rules[ttype].items():\nif k not in d.keys():\nprint(k,v)\nprint('Error 2!')     #TODO: raise something\nif v == 'int':\nval = int(d[k])\nelif v == 'string':\nval = d[k]\nelif v == 'double':\nval = float(d[k])\ncfg_dict[ttype][tname][k] = val"
+    },
+    {
+        "id": "class_FbDevSingle_method___init__",
+        "input": "# Task: Implement method __init__ in class FbDevSingle",
+        "output": "def __init__(self, _dproxy, _fbname):\nsuper(FbDevSingle, self).__init__()\nself.initial = 0.0\nself.setpoint = 0.0\nself.accumulator = 0.0\nself.enable = False\nself.locked = False\nself.saturated = False\nself.dproxy = _dproxy\nself.fbname = _fbname"
+    },
+    {
+        "id": "class_FbDevSingle_method_att_name",
+        "input": "# Task: Implement method att_name in class FbDevSingle",
+        "output": "def att_name(self, att):\nreturn f\"{self.fbname}_{att}\""
+    },
+    {
+        "id": "class_FbDevSingle_method_apply_scale",
+        "input": "# Task: Implement method apply_scale in class FbDevSingle",
+        "output": "def apply_scale(self, val, att, is_set=False):\nif f'{att}_scale'.lower() in fb_cfg[self.fbname].keys():\nscale = fb_cfg[self.fbname][f'{att}_scale'.lower()]['scale']\nif is_set:\nreturn val / scale\nelse:\nreturn val * scale\nelse:\nreturn val"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_state",
+        "input": "# Task: Implement method get_state in class FbDevSingle",
+        "output": "def get_state(self):\nself.initial = self.dproxy.read_attribute(self.att_name(\"initial\")).value\nself.setpoint = self.dproxy.read_attribute(self.att_name(\"Setpoint\")).value\nself.accumulator = self.dproxy.read_attribute(self.att_name(\"Accumulator\")).value\nself.enable = self.dproxy.read_attribute(self.att_name(\"enable\")).value\nself.locked = self.dproxy.read_attribute(self.att_name(\"locked\")).value\nself.saturated = self.dproxy.read_attribute(self.att_name(\"saturated\")).value"
+    },
+    {
+        "id": "class_FbDevSingle_method_set_enable",
+        "input": "# Task: Implement method set_enable in class FbDevSingle",
+        "output": "def set_enable(self, val):\nself.dproxy.write_attribute(self.att_name(\"enable\"), val)\nself.enable = val"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_enable",
+        "input": "# Task: Implement method get_enable in class FbDevSingle",
+        "output": "def get_enable(self):\nself.enable = self.dproxy.read_attribute(self.att_name(\"enable\")).value\nreturn self.enable"
+    },
+    {
+        "id": "class_FbDevSingle_method_set_initial",
+        "input": "# Task: Implement method set_initial in class FbDevSingle",
+        "output": "def set_initial(self, val):\nval = self.apply_scale(val, \"initial\", is_set=True)\nself.dproxy.write_attribute(self.att_name(\"initial\"), val)\nself.initial = val"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_initial",
+        "input": "# Task: Implement method get_initial in class FbDevSingle",
+        "output": "def get_initial(self):\nval = self.dproxy.read_attribute(self.att_name(\"initial\")).value\nself.initial = self.apply_scale(val, \"initial\")\nreturn self.initial"
+    },
+    {
+        "id": "class_FbDevSingle_method_set_setpoint",
+        "input": "# Task: Implement method set_setpoint in class FbDevSingle",
+        "output": "def set_setpoint(self, val):\nval = self.apply_scale(val, \"Setpoint\", is_set=True)\nself.dproxy.write_attribute(self.att_name(\"Setpoint\"), val)\nself.setpoint = val"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_setpoint",
+        "input": "# Task: Implement method get_setpoint in class FbDevSingle",
+        "output": "def get_setpoint(self):\nval = self.dproxy.read_attribute(self.att_name(\"Setpoint\")).value\nself.setpoint = self.apply_scale(val, \"Setpoint\")\nreturn self.setpoint"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_accumulator",
+        "input": "# Task: Implement method get_accumulator in class FbDevSingle",
+        "output": "def get_accumulator(self):\nval = self.dproxy.read_attribute(self.att_name(\"Accumulator\")).value\nself.accumulator = self.apply_scale(val, \"Accumulator\")\nreturn self.accumulator"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_locked",
+        "input": "# Task: Implement method get_locked in class FbDevSingle",
+        "output": "def get_locked(self):\nself.locked = self.dproxy.read_attribute(self.att_name(\"locked\")).value\nreturn self.locked"
+    },
+    {
+        "id": "class_FbDevSingle_method_get_saturated",
+        "input": "# Task: Implement method get_saturated in class FbDevSingle",
+        "output": "def get_saturated(self):\nself.saturated = self.dproxy.read_attribute(self.att_name(\"saturated\")).value\nreturn self.saturated"
+    },
+    {
+        "id": "class_FbDevSmoothTune_method___init__",
+        "input": "# Task: Implement method __init__ in class FbDevSmoothTune",
+        "output": "def __init__(self, _dproxy, _fbname, _up_rate = 0.14, _dn_rate = 0.5):\nsuper(FbDevSmoothTune, self).__init__(_dproxy, _fbname)\nself.up_portion = _up_rate\nself.dn_portion = _dn_rate\nself.q = queue.Queue()\nself.piezoThread = threading.Thread(target=self.piezoTunerChanger, args=([_fbname, f\"{_fbname}_initial\"],), daemon=True)\nself.piezoThread.start()"
+    },
+    {
+        "id": "class_FbDevSmoothTune_method_piezoTunerChanger",
+        "input": "# Task: Implement method piezoTunerChanger in class FbDevSmoothTune",
+        "output": "def piezoTunerChanger(self, name):\nself.piezo_dev = name[0]\nself.piezo_attr = name[1]\nself.first_start = True\nself.currentPiezoSettings = 0.0\nself.targetPiezoSettings = 0.0\nwhile True:\nsleep(0.1)\ntry:\nif not self.q.empty():\nself.targetPiezoSettings = self.q.get()\nif self.first_start:\nself.first_start = False\nself.currentPiezoSettings = self.get_initial()\nif abs(self.targetPiezoSettings - self.currentPiezoSettings) < 0.0001:\ncontinue\nelif self.targetPiezoSettings - self.currentPiezoSettings > self.up_portion:\nself.currentPiezoSettings += self.up_portion\nsuper(FbDevSmoothTune, self).set_initial(self.currentPiezoSettings)\nelif self.targetPiezoSettings - self.currentPiezoSettings < -self.dn_portion:\nself.currentPiezoSettings -= self.dn_portion\nsuper(FbDevSmoothTune, self).set_initial(self.currentPiezoSettings)\nelse:\nself.currentPiezoSettings = self.targetPiezoSettings\nsuper(FbDevSmoothTune, self).set_initial(self.currentPiezoSettings)\nexcept Exception as e:\ne_desc = \"\"\"FbDev Error while piezoTunerChanger :\\n\"%s\"!\"\"\"%str(e)"
+    },
+    {
+        "id": "class_FbDevMulti_method___init__",
+        "input": "# Task: Implement method __init__ in class FbDevMulti",
+        "output": "def __init__(self, _full_name, _ds_pre, _name_pre, _ds_agc, _name_agc):\nsuper(FbDevMulti, self).__init__()\nself.fb_pre = FbDevSingle(_ds_pre, _name_pre)\nself.fb_agc = FbDevSingle(_ds_agc, _name_agc)\nself.fbname_agc_full = _full_name\nself.agc_enable = False\nself.enable = False"
+    },
+    {
+        "id": "class_FbDevMulti_method_ping",
+        "input": "# Task: Implement method ping in class FbDevMulti",
+        "output": "def ping(self):\nself.fb_pre.ping()\nself.fb_agc.ping()"
+    },
+    {
+        "id": "class_FbDevMulti_method_set_agc_enable",
+        "input": "# Task: Implement method set_agc_enable in class FbDevMulti",
+        "output": "def set_agc_enable(self, val):\nif val:\nif self.fb_pre.get_enable():\nself.fb_pre.set_enable(False)\nself.fb_agc.set_enable(True)\nelse:\nif self.fb_agc.get_enable():\nself.fb_agc.set_enable(False)\nself.fb_pre.set_enable(True)\nself.agc_enable = val"
+    },
+    {
+        "id": "class_FbDevMulti_method_set_enable",
+        "input": "# Task: Implement method set_enable in class FbDevMulti",
+        "output": "def set_enable(self, val):\nself.enable = val\nif val:\nif self.agc_enable:\nself.fb_agc.set_enable(val)\nelse:\nself.fb_pre.set_enable(val)\nelse:\nself.fb_agc.set_enable(val)\nself.fb_pre.set_enable(val)"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_enable",
+        "input": "# Task: Implement method get_enable in class FbDevMulti",
+        "output": "def get_enable(self):\nif self.agc_enable:\nreturn self.fb_agc.get_enable()\nelse:\nreturn self.fb_pre.get_enable()"
+    },
+    {
+        "id": "class_FbDevMulti_method_set_initial",
+        "input": "# Task: Implement method set_initial in class FbDevMulti",
+        "output": "def set_initial(self, val):\nself.fb_agc.set_initial(val)\nself.fb_pre.set_initial(val)"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_initial",
+        "input": "# Task: Implement method get_initial in class FbDevMulti",
+        "output": "def get_initial(self):\nif self.agc_enable:\nreturn self.fb_agc.get_initial()\nelse:\nreturn self.fb_pre.get_initial()"
+    },
+    {
+        "id": "class_FbDevMulti_method_set_setpoint",
+        "input": "# Task: Implement method set_setpoint in class FbDevMulti",
+        "output": "def set_setpoint(self, val):\nself.fb_agc.set_setpoint(val)\nself.fb_pre.set_setpoint(val)"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_setpoint",
+        "input": "# Task: Implement method get_setpoint in class FbDevMulti",
+        "output": "def get_setpoint(self):\nif self.agc_enable:\nreturn self.fb_agc.get_setpoint()\nelse:\nreturn self.fb_pre.get_setpoint()"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_accumulator",
+        "input": "# Task: Implement method get_accumulator in class FbDevMulti",
+        "output": "def get_accumulator(self):\nif self.agc_enable:\nreturn self.fb_agc.get_accumulator()\nelse:\nreturn self.fb_pre.get_accumulator()"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_locked",
+        "input": "# Task: Implement method get_locked in class FbDevMulti",
+        "output": "def get_locked(self):\nif self.agc_enable:\nreturn self.fb_agc.get_locked()\nelse:\nreturn self.fb_pre.get_locked()"
+    },
+    {
+        "id": "class_FbDevMulti_method_get_saturated",
+        "input": "# Task: Implement method get_saturated in class FbDevMulti",
+        "output": "def get_saturated(self):\nif self.agc_enable:\nreturn self.fb_agc.get_saturated()\nelse:\nreturn self.fb_pre.get_saturated()"
+    },
+    {
+        "id": "class_FbDsDev_method___init__",
+        "input": "# Task: Implement method __init__ in class FbDsDev",
+        "output": "def __init__(self, _ds):\nself.dev_proxies = {}\nself.fb_devs = {}\nself.ds = _ds"
+    },
+    {
+        "id": "class_FbDsDev_method_add_dev",
+        "input": "# Task: Implement method add_dev in class FbDsDev",
+        "output": "def add_dev(self, fb_name, fbid, devnm):\nfor _devnm in devnm:\nif _devnm not in self.dev_proxies.keys():\nself.dev_proxies[_devnm] = DeviceProxy(_devnm)\nif len(fbid) == len(devnm) == 1:\nif fb_name == \"cavityTune\":\nself.fb_devs[fb_name] = FbDevSmoothTune(self.dev_proxies[devnm[0]], fbid[0])\nelse:\nself.fb_devs[fb_name] = FbDevSingle(self.dev_proxies[devnm[0]], fbid[0])\nelif len(fbid) == len(devnm) == 2:\nself.fb_devs[fb_name] = FbDevMulti(fb_name, self.dev_proxies[devnm[0]], fbid[0], self.dev_proxies[devnm[1]], fbid[1])\nelse:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = f\"FbDev add_dev 1 fbid: {fbid} devnm: {devnm}\"\nprint(e_desc)\nself.ds.set_status(e_desc)"
+    },
+    {
+        "id": "class_FbDsDev_method_ping",
+        "input": "# Task: Implement method ping in class FbDsDev",
+        "output": "def ping(self):\nfor k, dv in self.fb_devs.items():\ndv.ping()"
+    },
+    {
+        "id": "class_FbDsDev_method_state",
+        "input": "# Task: Implement method state in class FbDsDev",
+        "output": "def state(self):\nfor k, dv in self.dev_proxies.items():\nif dv.state() == PyTango.DevState.FAULT:\nreturn PyTango.DevState.FAULT\nreturn PyTango.DevState.STANDBY"
+    },
+    {
+        "id": "class_FbDsDev_method_set_agc_enable",
+        "input": "# Task: Implement method set_agc_enable in class FbDsDev",
+        "output": "def set_agc_enable(self, val):\nfor k, dv in self.fb_devs.items():\ndv.set_agc_enable(val)"
+    },
+    {
+        "id": "class_FbDsDev_method_turn_off",
+        "input": "# Task: Implement method turn_off in class FbDsDev",
+        "output": "def turn_off(self):\nfor k, dv in self.fb_devs.items():\natt = f'{k}_enable'\nif dv.get_enable():\nself.ds._myself_dev.write_attribute(att, False)"
+    },
+    {
+        "id": "class_FbDsDev_method_update_all_initial",
+        "input": "# Task: Implement method update_all_initial in class FbDsDev",
+        "output": "def update_all_initial(self):\ntry:\nfor _nm, _dv in self.fb_devs.items():\nif _dv.get_enable() and _dv.get_locked():\ninit_val = self.fbRead_attr(f'{_nm}_Accumulator')\nself.ds._myself_dev.write_attribute(f'{_nm}_initial', init_val)\nexcept PyTango.DevFailed as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"FbDev PyTango Error in FbDsDev->update_all_initial() device :\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.ds.set_status(e_desc)\nexcept Exception as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = f\"FbDev General Error in FbDsDev->update_all_initial() device :\\n{str(e)}\"\nprint(e_desc)\nself.ds.set_status(e_desc)"
+    },
+    {
+        "id": "class_FbDsDev_method_fbRead_attr",
+        "input": "# Task: Implement method fbRead_attr in class FbDsDev",
+        "output": "def fbRead_attr(self, attr):\ntry:\n_nm, att = attr.split('_')\nif att == \"enable\":\nreturn self.fb_devs[_nm].get_enable()\nelif att == \"enableRaw\":\nreturn self.fb_devs[_nm].enable\nelif att == \"initial\":\nreturn self.fb_devs[_nm].get_initial()\nelif att == \"Setpoint\":\nreturn self.fb_devs[_nm].get_setpoint()\nelif att == \"Accumulator\":\nreturn self.fb_devs[_nm].get_accumulator()\nelif att == \"locked\":\nreturn self.fb_devs[_nm].get_locked()\nelif att == \"saturated\":\nreturn self.fb_devs[_nm].get_saturated()\nelse:\nprint(\"Wrong att\")\nreturn 0\nexcept PyTango.DevFailed as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"FbDev Error 1 while reading device :\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.ds.set_status(e_desc)\nexcept Exception as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = f\"FbDev Error 2 while reading device {attr} :\\n{str(e)}\"\nprint(e_desc)\nself.ds.set_status(e_desc)\nreturn 0"
+    },
+    {
+        "id": "class_FbDsDev_method_fbWrite_attr",
+        "input": "# Task: Implement method fbWrite_attr in class FbDsDev",
+        "output": "def fbWrite_attr(self, attr, val):\ntry:\n_nm, att = attr.split('_')\nif att == \"enable\":\nif val == False:\nif self.fb_devs[_nm].get_locked():\ninit_val = self.fbRead_attr(f'{_nm}_Accumulator')\nself.ds._myself_dev.write_attribute(f'{_nm}_initial', init_val)\nself.fb_devs[_nm].set_enable(val)\nelif att == \"enableRaw\":\nself.fb_devs[_nm].set_enable(val)\nelif att == \"initial\":\nself.fb_devs[_nm].set_initial(val)\nelif att == \"Setpoint\":\nself.fb_devs[_nm].set_setpoint(val)\nif (_nm == 'rfLevel') and (self.ds.rfLevel_SetpointToInitital != 0.0):\ninit_val = val * self.ds.rfLevel_SetpointToInitital\nself.ds._myself_dev.write_attribute(f'{_nm}_initial', init_val)\nelif att == \"Accumulator\":\nself.fb_devs[_nm].set_accumulator(val)\nelif att == \"locked\":\nself.fb_devs[_nm].set_locked(val)\nelif att == \"saturated\":\nself.fb_devs[_nm].set_saturated(val)\nelse:\nprint(\"Wrong att\")\nexcept PyTango.DevFailed as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"FbDev Error 1 while writing device :\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.ds.set_status(e_desc)\nexcept Exception as e:\nself.ds.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"FbDev Error 2 while writing device :\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.ds.set_status(e_desc)"
+    },
+    {
+        "id": "class_AdcDev_method___init__",
+        "input": "# Task: Implement method __init__ in class AdcDev",
+        "output": "def __init__(self, cfg, dev_proxy, points_count=200):\nself.dev = dev_proxy\nself.cfg = cfg\nself.need_start = False\nself.points_count = points_count"
+    },
+    {
+        "id": "class_AdcDev_method_restart",
+        "input": "# Task: Implement method restart in class AdcDev",
+        "output": "def restart(self):\nif self.need_start:\nself.dev.command_inout(\"StartAcq\")\nself.need_start = False"
+    },
+    {
+        "id": "class_AdcDev_method_configure",
+        "input": "# Task: Implement method configure in class AdcDev",
+        "output": "def configure(self):\nself.dev.write_attribute(\"AcqAutoRestart\", False)\nself.dev.command_inout(\"StopAcq\")\nself.derive_adc_sequencer_from_cfg()\nself.dev.write_attribute(\"TriggerSource\", 0)\nself.dev.write_attribute(\"AcqPointsNumber\", self.points_count)\nself.dev.write_attribute(\"AcqAutoRestart\", True)\nself.need_start = True"
+    },
+    {
+        "id": "class_AdcDev_method_stop",
+        "input": "# Task: Implement method stop in class AdcDev",
+        "output": "def stop(self):\nself.dev.write_attribute(\"AcqAutoRestart\", False)\nself.dev.command_inout(\"StopAcq\")"
+    },
+    {
+        "id": "class_AdcDev_method_derive_adc_sequencer_from_cfg",
+        "input": "# Task: Implement method derive_adc_sequencer_from_cfg in class AdcDev",
+        "output": "def derive_adc_sequencer_from_cfg(self):\nchans = [el['channel'] for el in self.cfg['waveforms'].values()]\nchans.sort()\nself.sequencer = {\n'Adc1': [],\n'Adc2': [],\n'Adc3': [],\n'Adc4': []\n}\nfor el in chans:\n_adc = el[:4]\n_ch = int(el[6:8])\nif _adc in self.sequencer.keys() and _ch >= 0 and _ch < 8:\nself.sequencer[_adc].append(_ch)\nelse:\nprint(\"Error!\") #TODO: throw exeption!\nfor key,val in self.sequencer.items():\n_att_name = key.upper()+'ChanSequence'\nself.dev.write_attribute(_att_name, val)\nreturn self.sequencer"
+    },
+    {
+        "id": "class_AdcDev_method_calculate_samplig_points",
+        "input": "# Task: Implement method calculate_samplig_points in class AdcDev",
+        "output": "def calculate_samplig_points(self, sampling_point_set, chan_dict):\nchans = [el['channel'] for el in self.cfg['waveforms'].values()]\nchans.sort()\nfor el in chans:\n_adc = el[:4]\n_adc_samp_period = len(self.sequencer[_adc])\nif _adc_samp_period == 0:\nchan_dict[el.lower()]['sampling_point'] = sampling_point_set\nelse:\nchan_dict[el.lower()]['sampling_point'] = math.floor(sampling_point_set/_adc_samp_period)"
+    },
+    {
+        "id": "class_DioDev_method___init__",
+        "input": "# Task: Implement method __init__ in class DioDev",
+        "output": "def __init__(self, cfg, dev_proxy):\nself.dev = dev_proxy\nself.cfg = cfg\nself.di_reg = 0\nself.do_reg = 0\nself.status_reg = 0\nself.alarmState0 = 0\nself.do_pulsed_settings = {'pulsed_100ms': 1, 'pulsed_500ms': 2,\n'pulsed_2s': 3, 'pulsed_5s': 4}"
+    },
+    {
+        "id": "class_DioDev_method_configure",
+        "input": "# Task: Implement method configure in class DioDev",
+        "output": "def configure(self):\nfor key,val in self.cfg['do_pulsed'].items():\n_name = \"pulsedMode\" + str(val['bit'])\n_setting = self.do_pulsed_settings[val['mode']]\nself.dev.write_attribute(_name, _setting)\n_mask = 0\nfor key,val in self.cfg['interlocks'].items():\n_bit_n = val['bit']\n_mask |= 1 << _bit_n\nself.dev.write_attribute(\"alarmEna0\", _mask)"
+    },
+    {
+        "id": "class_DioDev_method_update",
+        "input": "# Task: Implement method update in class DioDev",
+        "output": "def update(self):\nself.di_reg = self.dev.read_attribute(\"input\").value\ndo_val = self.dev.read_attribute(\"outputValues\").value\nval = 0\nfor idx, bit in enumerate(do_val):\nval += bit*(2**idx)\nself.do_reg = val"
+    },
+    {
+        "id": "class_DioDev_method_bit_from_word",
+        "input": "# Task: Implement method bit_from_word in class DioDev",
+        "output": "def bit_from_word(self, word, bit, size=1):\nmask = ((1<<size)-1) << bit\nif size == 1:\nreturn bool(word & (0x1<< (bit) ))\nelse:\nreturn int((word & mask) >> bit)"
+    },
+    {
+        "id": "class_DioDev_method_di_bit_rd",
+        "input": "# Task: Implement method di_bit_rd in class DioDev",
+        "output": "def di_bit_rd(self, bit, size=1):\nval = 0\nif size == 1:\nval = self.di_reg[bit]\nelse:\nfor idx in range(bit, bit+size):\nval += self.di_reg[bit]*(2**idx-bit)\nreturn val"
+    },
+    {
+        "id": "class_DioDev_method_do_bit_wr",
+        "input": "# Task: Implement method do_bit_wr in class DioDev",
+        "output": "def do_bit_wr(self, val, bit, size=1):\nmask = (1<<size)-1\nval &= mask\nmask <<= bit\nself.do_reg &= ~mask\nself.do_reg |= (int(val) << bit)\nif size==1:\nself.dev.write_attribute(\"outputData\"+str(bit), val)\nelse:\natts = []\nfor idx in range(bit, bit+size):\natts.append([\"outputData\"+str(idx), val&1])\nval = val >> 1\nself.dev.write_attributes(atts)"
+    },
+    {
+        "id": "class_DioDev_method_do_bit_rd",
+        "input": "# Task: Implement method do_bit_rd in class DioDev",
+        "output": "def do_bit_rd(self, bit, size=1):\nreturn self.bit_from_word(self.do_reg, bit, size)"
+    },
+    {
+        "id": "class_DacDev_method___init__",
+        "input": "# Task: Implement method __init__ in class DacDev",
+        "output": "def __init__(self, cfg, dev_proxy):\nself.dev = dev_proxy\nself.cfg = cfg"
+    },
+    {
+        "id": "class_DacDev_method_configure",
+        "input": "# Task: Implement method configure in class DacDev",
+        "output": "def configure(self):\nfor keys in self.cfg['scalar']:\nchId = self.cfg['scalar'][keys]['channel'][-2:]\nif self.dev.read_attribute('pwDown'+chId).value == True:\nself.dev.write_attribute('syncEna'+chId, False)\nself.dev.write_attribute('voltage'+chId, 0.0)\nself.dev.write_attribute('pwDown'+chId, False)"
+    },
+    {
+        "id": "class_DacDev_method_read_ao",
+        "input": "# Task: Implement method read_ao in class DacDev",
+        "output": "def read_ao(self, name):\nchan = self.cfg['scalar'][name]['channel']\nscale = self.cfg['scalar'][name]['scale']\nao = self.dev.read_attribute(chan).value\nreturn ao*scale"
+    },
+    {
+        "id": "class_DacDev_method_write_ao",
+        "input": "# Task: Implement method write_ao in class DacDev",
+        "output": "def write_ao(self, name, val):\nchan = self.cfg['scalar'][name]['channel']\nscale = self.cfg['scalar'][name]['scale']\nself.dev.write_attribute(chan, val/scale)"
+    },
+    {
+        "id": "class_RfChannelDs_method_setPhaseOffset",
+        "input": "# Task: Implement method setPhaseOffset in class RfChannelDs",
+        "output": "def setPhaseOffset(self, attr):\nif not  all([ v == 0 for v in self.rfPhaseShifterCalib_values ]):\nval = self.phaseShifter_value * self.rfPhaseShifterCalib_values[0] + \\\nself.ao_refPhaseOffsetSetpoint_value * self.rfPhaseShifterCalib_values[1] + \\\nself.rfPhaseShifterCalib_values[2]\nbval = self.fb_devs.fbRead_attr('rfPhase_enableRaw')\nif bval == True:\nself.fb_devs.fbWrite_attr('rfPhase_enableRaw', False)\nself._myself_dev.write_attribute('rfPhase_initial', val)\nif bval == True:\nself.fb_devs.fbWrite_attr('rfPhase_enableRaw', True)"
+    },
+    {
+        "id": "class_RfChannelDs_method_ping_all",
+        "input": "# Task: Implement method ping_all in class RfChannelDs",
+        "output": "def ping_all(self):\nfor dev in [self._dio_dev.dev, self._dac_dev.dev, self._adc_dev.dev]:\ndev.ping()"
+    },
+    {
+        "id": "class_RfChannelDs_method_get_all_status",
+        "input": "# Task: Implement method get_all_status in class RfChannelDs",
+        "output": "def get_all_status(self):\nfor dev in [self._dio_dev.dev, self._dac_dev.dev, self._adc_dev.dev, self.fb_devs]:\nif dev.state() == PyTango.DevState.FAULT:\nreturn False\nreturn True"
+    },
+    {
+        "id": "class_RfChannelDs_method_configure_devices",
+        "input": "# Task: Implement method configure_devices in class RfChannelDs",
+        "output": "def configure_devices(self):\nfor dev in [self._dio_dev.dev, self._dac_dev.dev, self._adc_dev.dev]:\ndev.ping()\nself._dio_dev.configure()\nself._dac_dev.configure()\nself._adc_dev.configure()\nself.set_modulator_off_flag = True\nself.set_state(PyTango.DevState.STANDBY)"
+    },
+    {
+        "id": "class_RfChannelDs_method_get_dio_alarm",
+        "input": "# Task: Implement method get_dio_alarm in class RfChannelDs",
+        "output": "def get_dio_alarm(self,event_data):\nprint(\"get_dio_alarm\\t\", type(event_data.attr_value.value))"
+    },
+    {
+        "id": "class_RfChannelDs_method_get_adc_data",
+        "input": "# Task: Implement method get_adc_data in class RfChannelDs",
+        "output": "def get_adc_data(self,event_data):\nif event_data.err:\nprint(\"get_adc_data event_data.err\\t\", event_data.errors)\nelif type(event_data.attr_value.value) is not type(None):\natt_name_v = event_data.attr_name.split('/')[-1]\nname_recent_v = self.adc_chans[att_name_v]['name_recent']\nname_osc_v = self.adc_chans[att_name_v]['name_osc']\nscale_v = self.adc_chans[att_name_v]['scale']\nsamplin_point = self.adc_chans[att_name_v]['sampling_point']\nosc = np.array(event_data.attr_value.value)\nif samplin_point < osc.shape[0]: #event_data.attr_value.value.shape[0]:\nself.recent_data[name_recent_v] = osc[samplin_point]*scale_v # = event_data.attr_value.value[samplin_point]*scale_v\nelse:\nself.recent_data[name_recent_v] = 0.0\nself.osc_data[name_osc_v] = osc*scale_v # event_data.attr_value.value*scale_v\nself.push_change_event(name_recent_v, self.recent_data[name_recent_v])\nself.push_change_event(name_osc_v, self.osc_data[name_osc_v])"
+    },
+    {
+        "id": "class_RfChannelDs_method_fbRead_attr_ds",
+        "input": "# Task: Implement method fbRead_attr_ds in class RfChannelDs",
+        "output": "def fbRead_attr_ds(self, attr):\nattr.set_value(self.fb_devs.fbRead_attr(attr.get_name()))"
+    },
+    {
+        "id": "class_RfChannelDs_method_fbWrite_attr_ds",
+        "input": "# Task: Implement method fbWrite_attr_ds in class RfChannelDs",
+        "output": "def fbWrite_attr_ds(self, attr):\nself.fb_devs.fbWrite_attr(attr.get_name(), attr.get_write_value())"
+    },
+    {
+        "id": "class_RfChannelDs_method_init_device",
+        "input": "# Task: Implement method init_device in class RfChannelDs",
+        "output": "def init_device(self):\nDevice.init_device(self)\nself.set_state(PyTango.DevState.STANDBY)\nself.rfLevel_SetpointToInitital = 0.0\nself.rfPhaseShifterCalib_values = [0.0, 0.0, 0.0]\nself.ao_refPhaseOffsetSetpoint_value = 0.0\nself.phaseShifter_value = 0\nself._modulatorFailure = False\nself._cavityRfFailure = False\nself.autoEnableCnt = 0\nself.turnedOnFlag = False\nif not hasattr(self, 'adc_chans'):\nself.adc_chans = OrderedDict()\nself.autoEnableDict = OrderedDict()\nself.autoEnableFlag = OrderedDict()\nself.osc_data = {}\nself.recent_data = {}\nself._samplingPoint = 0\nself.fb_update_counter = 0\ntry:\nupdate_cfg(dio_cfg, dio_cfg_patterm, self.dioConfig)\nupdate_cfg(dac_cfg, dac_cfg_patterm, self.dacConfig)\nself.fb_devs = FbDsDev(self)\nself._adc_dev = AdcDev(adc_cfg, DeviceProxy(self.adc), 200)\nself._dio_dev = DioDev(dio_cfg, DeviceProxy(self.dio))\nself._dac_dev = DacDev(dac_cfg, DeviceProxy(self.dac))\nself._myself_dev = DeviceProxy(self.get_name())\nfor key,val in adc_cfg['waveforms'].items():\nself.adc_chans[val['channel'].lower()] = {'name': key, 'scale': val['scale'], 'name_recent': 'recent_'+key, 'name_osc': 'osc_'+key, 'sampling_point': 0}\nself.osc_data['osc_'+key] = np.zeros(100000) #TODO: do without hardcoded sample count!\nself.recent_data['recent_'+key] = 0.0\nexcept PyTango.DevFailed as e:\nself.set_state(PyTango.DevState.DISABLE)\ne_desc = \"\"\"Error while creating device proxies:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nreturn\nexcept Exception as e:\nself.set_state(PyTango.DevState.DISABLE)\ne_desc = \"\"\"Error while creating device proxies:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nreturn\ntry:\nif(len(fb_cfg.keys()) > len(self.fb)):\nself.set_state(PyTango.DevState.FAULT)\nself.set_status(\"Wrong Fb dev count\")\nreturn\nself.fb_devs.add_dev('cavityTune', ['cavityTune'], [self.fb[2]])\nself.fb_devs.add_dev('rfPhase', ['rfPhasePre', 'rfPhase'], [self.fb[4], self.fb[1]])\nself.fb_devs.add_dev('rfLevel', ['rfLevel', 'rfLevelAGC'], [self.fb[0], self.fb[3]])\nexcept PyTango.DevFailed as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"3 Error while initializing FB device:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nreturn\nexcept Exception as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"4 Error while initializing FB device:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nreturn\ntry:\nself.modulatorFailure.set_change_event(True, False)\nexcept Exception as e:\nprint(\"Ooops in self.modulatorFailure.set_change_event(True, False)!\")\nif self.rfLevelSetToInitial != None:\nself.rfLevel_SetpointToInitital = self.rfLevelSetToInitial[0]\nif (self.rfPhaseShifterCalib != None) and len(self.rfPhaseShifterCalib_values) == len(self.rfPhaseShifterCalib):\nfor idx, v in enumerate(self.rfPhaseShifterCalib):\nself.rfPhaseShifterCalib_values[idx] = v\nself.fb_update_counter = 0\nself.fault_counter = 0\nself.alarm_state = True\nself.autoEnableFlag.clear()\ntry:\nself.configure_devices()\nprint(\"conf success!\")\nexcept PyTango.DevFailed as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"1 Error while initializing devices:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nexcept Exception as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"2 Error while initializing devices:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)"
+    },
+    {
+        "id": "class_RfChannelDs_method_delete_device",
+        "input": "# Task: Implement method delete_device in class RfChannelDs",
+        "output": "def delete_device(self):\nself._adc_dev.stop()\nself._dio_dev.do_bit_wr(False, dio_cfg['do_bits']['enableAGC']['bit'])"
+    },
+    {
+        "id": "class_RfChannelDs_method_default_is_allowed",
+        "input": "# Task: Implement method default_is_allowed in class RfChannelDs",
+        "output": "def default_is_allowed(self, attr):\nif attr==attr.READ_REQ:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]\nelse:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_enableAGC",
+        "input": "# Task: Implement method read_enableAGC in class RfChannelDs",
+        "output": "def read_enableAGC(self):\nreturn  self._dio_dev.do_bit_rd(dio_cfg['do_bits']['enableAGC']['bit'])"
+    },
+    {
+        "id": "class_RfChannelDs_method_write_enableAGC",
+        "input": "# Task: Implement method write_enableAGC in class RfChannelDs",
+        "output": "def write_enableAGC(self, value):\nself._dio_dev.do_bit_wr(value, dio_cfg['do_bits']['enableAGC']['bit'])\nself.fb_devs.set_agc_enable(value)"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_enableAGC_allowed",
+        "input": "# Task: Implement method is_enableAGC_allowed in class RfChannelDs",
+        "output": "def is_enableAGC_allowed(self, attr):\nif attr==attr.READ_REQ:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]\nelse:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_modulatorAlarm",
+        "input": "# Task: Implement method read_modulatorAlarm in class RfChannelDs",
+        "output": "def read_modulatorAlarm(self):\nreturn self.alarm_state"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorAlarm_allowed",
+        "input": "# Task: Implement method is_modulatorAlarm_allowed in class RfChannelDs",
+        "output": "def is_modulatorAlarm_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_modulatorIsOn",
+        "input": "# Task: Implement method read_modulatorIsOn in class RfChannelDs",
+        "output": "def read_modulatorIsOn(self):\nreturn self._dio_dev.di_bit_rd(dio_cfg['di_bits']['modulatorIsOn']['bit'])"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorIsOn_allowed",
+        "input": "# Task: Implement method is_modulatorIsOn_allowed in class RfChannelDs",
+        "output": "def is_modulatorIsOn_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_modulatorReady",
+        "input": "# Task: Implement method read_modulatorReady in class RfChannelDs",
+        "output": "def read_modulatorReady(self):\nreturn self._dio_dev.di_bit_rd(dio_cfg['di_bits']['modulatorReady']['bit'])"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorReady_allowed",
+        "input": "# Task: Implement method is_modulatorReady_allowed in class RfChannelDs",
+        "output": "def is_modulatorReady_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_samplingPoint",
+        "input": "# Task: Implement method read_samplingPoint in class RfChannelDs",
+        "output": "def read_samplingPoint(self):\nreturn self._samplingPoint"
+    },
+    {
+        "id": "class_RfChannelDs_method_write_samplingPoint",
+        "input": "# Task: Implement method write_samplingPoint in class RfChannelDs",
+        "output": "def write_samplingPoint(self, value):\nself._samplingPoint = value\nself._adc_dev.calculate_samplig_points(value, self.adc_chans)"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_samplingPoint_allowed",
+        "input": "# Task: Implement method is_samplingPoint_allowed in class RfChannelDs",
+        "output": "def is_samplingPoint_allowed(self, attr):\nif attr==attr.READ_REQ:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]\nelse:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_modulatorFailure",
+        "input": "# Task: Implement method read_modulatorFailure in class RfChannelDs",
+        "output": "def read_modulatorFailure(self):\nreturn self._modulatorFailure"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorFailure_allowed",
+        "input": "# Task: Implement method is_modulatorFailure_allowed in class RfChannelDs",
+        "output": "def is_modulatorFailure_allowed(self, attr):\nreturn True"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_cavityRfFailure",
+        "input": "# Task: Implement method read_cavityRfFailure in class RfChannelDs",
+        "output": "def read_cavityRfFailure(self):\nreturn self._cavityRfFailure"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_cavityRfFailure_allowed",
+        "input": "# Task: Implement method is_cavityRfFailure_allowed in class RfChannelDs",
+        "output": "def is_cavityRfFailure_allowed(self, attr):\nreturn True"
+    },
+    {
+        "id": "class_RfChannelDs_method_initialize_dynamic_attributes",
+        "input": "# Task: Implement method initialize_dynamic_attributes in class RfChannelDs",
+        "output": "def initialize_dynamic_attributes(self):\nself.debug_stream(\"In initialize_dynamic_attributes()\")\nprint(\"initialize_dynamic_attributes()\")\ntry:\nfor key,item in dio_cfg['interlocks'].items():\nbit = item['bit']\nmyinterlockBit = PyTango.Attr('interlock_'+key, PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(myinterlockBit,RfChannelDs.read_interlockBit, None, RfChannelDs.default_is_allowed)\nfor key,item in dio_cfg['di_bits'].items():\nif key in dio_static_names:\ncontinue\nmydi_bit = PyTango.Attr(key, PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(mydi_bit,RfChannelDs.read_di_bit, None, RfChannelDs.default_is_allowed)\nfor key,item in dio_cfg['do_words'].items():\nif key in dio_static_names:\ncontinue\nmydo_word = PyTango.Attr(key, PyTango.DevULong, PyTango.READ_WRITE)\nmydo_word.set_memorized()\nmydo_word.set_memorized_init(True)\nif 'size' in item.keys():\nmax = (1 << item['size'])-1\nelse:\nmax = 1\np = PyTango.UserDefaultAttrProp()\np.set_max_value(str(max))\np.set_min_value(\"0\")\nmydo_word.set_default_properties(p)\nself.add_attribute(mydo_word,RfChannelDs.read_do_word, RfChannelDs.write_do_word, RfChannelDs.default_is_allowed)\nfor key,item in self.adc_chans.items():\nmyrecent = PyTango.Attr(item['name_recent'], PyTango.DevDouble, PyTango.READ)\nmyrecent.set_change_event(True, False)\nself.add_attribute(myrecent,RfChannelDs.read_recent, None, RfChannelDs.default_is_allowed)\nmyosc = PyTango.SpectrumAttr(item['name_osc'], PyTango.DevDouble, PyTango.READ, 1000)\nmyosc.set_change_event(True, False)\nself.add_attribute(myosc,RfChannelDs.read_osc, None, RfChannelDs.default_is_allowed)\nself._adc_dev.dev.subscribe_event(key, tango.EventType.CHANGE_EVENT, self.get_adc_data, stateless=True)\nfor key in ('agc', 'rfLevel', 'rfPhase', 'cavityTune'):\nmyAutoEnable = PyTango.Attr(key+'_autoEnable', PyTango.DevBoolean, PyTango.READ_WRITE)\nmyAutoEnable.set_memorized()\nmyAutoEnable.set_memorized_init(True)\nself.add_attribute(myAutoEnable,RfChannelDs.read_autoEnable, RfChannelDs.write_autoEnable, RfChannelDs.default_is_allowed)\nself.autoEnableDict[key] = False\nfor key in ('rfLevel', 'rfPhase', 'cavityTune'):\nitem = fb_cfg[key]\nmyfbEnable = PyTango.Attr(key+'_enable', PyTango.DevBoolean, PyTango.READ_WRITE)\nself.add_attribute(myfbEnable,RfChannelDs.fbRead_attr_ds, RfChannelDs.fbWrite_attr_ds, RfChannelDs.default_is_allowed)\nself.attr_fbEnable_read = False\nif item['setpoint']:\nmyfbSetpoint = PyTango.Attr(key+'_Setpoint', PyTango.DevDouble, PyTango.READ_WRITE)\nmyfbSetpoint.set_memorized()\nmyfbSetpoint.set_memorized_init(True)\nif 'setpoint_scale' in item.keys():\np = PyTango.UserDefaultAttrProp()\nif 'min_lim' in item['setpoint_scale'].keys():\np.set_min_value(str(item['setpoint_scale']['min_lim']))\nif 'max_lim' in item['setpoint_scale'].keys():\np.set_max_value(str(item['setpoint_scale']['max_lim']))\nmyfbSetpoint.set_default_properties(p)\nself.add_attribute(myfbSetpoint,RfChannelDs.fbRead_attr_ds, RfChannelDs.fbWrite_attr_ds,  RfChannelDs.default_is_allowed)\nmyfbInitial = PyTango.Attr(key+'_initial', PyTango.DevDouble, PyTango.READ_WRITE)\nmyfbInitial.set_memorized()\nmyfbInitial.set_memorized_init(True)\nif 'initial_scale' in item.keys():\np = PyTango.UserDefaultAttrProp()\nif 'min_lim' in item['initial_scale'].keys():\np.set_min_value(str(item['initial_scale']['min_lim']))\nif 'max_lim' in item['initial_scale'].keys():\np.set_max_value(str(item['initial_scale']['max_lim']))\nmyfbInitial.set_default_properties(p)\nself.add_attribute(myfbInitial,RfChannelDs.fbRead_attr_ds, RfChannelDs.fbWrite_attr_ds,  RfChannelDs.default_is_allowed)\nmyfbAcc = PyTango.Attr(key+'_Accumulator', PyTango.DevDouble, PyTango.READ_WRITE)\nself.add_attribute(myfbAcc,RfChannelDs.fbRead_attr_ds, None, RfChannelDs.default_is_allowed)\nmyfbLocked = PyTango.Attr(key+'_locked', PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(myfbLocked,RfChannelDs.read_fbLocked, None,  RfChannelDs.default_is_allowed)\nmyfbSaturated = PyTango.Attr(key+'_saturated', PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(myfbSaturated,RfChannelDs.fbRead_attr_ds, None,  RfChannelDs.default_is_allowed)\nfor key,item in dac_cfg['scalar'].items():\nmydacScalar = PyTango.Attr('ao_'+key, PyTango.DevDouble, PyTango.READ_WRITE)\nif 'memorize' in item.keys() and item['memorize']:\nmydacScalar.set_memorized()\nmydacScalar.set_memorized_init(True)\np = PyTango.UserDefaultAttrProp()\nif 'min_lim' in item.keys():\np.set_min_value(str(item['min_lim']))\nif 'max_lim' in item.keys():\np.set_max_value(str(item['max_lim']))\nmydacScalar.set_default_properties(p)\nif 'readonly' in item.keys() and item['readonly']:\nself.add_attribute(mydacScalar,RfChannelDs.read_dacScalar, None, RfChannelDs.default_is_allowed)\nelse:\nself.add_attribute(mydacScalar,RfChannelDs.read_dacScalar, RfChannelDs.write_dacScalar, RfChannelDs.default_is_allowed)\nexcept Exception as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"Error while initializing dynamic attributes:\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\n\"\"\"   Example to add dynamic attributes\nCopy inside the folowing protected area to instanciate at startup.\"\"\"\n\"\"\"    For Attribute interlockBit\nmyinterlockBit = PyTango.Attr('MyinterlockBit', PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(myinterlockBit,RfChannelDs.read_interlockBit, None, RfChannelDs.is_interlockBit_allowed)\nself.attr_interlockBit_read = False\n\"\"\"\n\"\"\"    For Attribute recent\nmyrecent = PyTango.Attr('Myrecent', PyTango.DevDouble, PyTango.READ)\nself.add_attribute(myrecent,RfChannelDs.read_recent, None, RfChannelDs.is_recent_allowed)\nself.attr_recent_read = 0.0\n\"\"\"\n\"\"\"    For Attribute di_bit\nmydi_bit = PyTango.Attr('Mydi_bit', PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(mydi_bit,RfChannelDs.read_di_bit, None, RfChannelDs.is_di_bit_allowed)\nself.attr_di_bit_read = False\n\"\"\"\n\"\"\"    For Attribute do_word\nmydo_word = PyTango.Attr('Mydo_word', PyTango.DevULong, PyTango.READ_WRITE)\nmydo_word.set_memorized()\nmydo_word.set_memorized_init(True)\nself.add_attribute(mydo_word,RfChannelDs.read_do_word, RfChannelDs.write_do_word, RfChannelDs.is_do_word_allowed)\nself.attr_do_word_read = 0\n\"\"\"\n\"\"\"    For Attribute fbLocked\nmyfbLocked = PyTango.Attr('MyfbLocked', PyTango.DevBoolean, PyTango.READ)\nself.add_attribute(myfbLocked,RfChannelDs.read_fbLocked, None, RfChannelDs.is_fbLocked_allowed)\nself.attr_fbLocked_read = False\n\"\"\"\n\"\"\"    For Attribute fbEnable\nmyfbEnable = PyTango.Attr('MyfbEnable', PyTango.DevBoolean, PyTango.READ_WRITE)\nself.add_attribute(myfbEnable,RfChannelDs.read_fbEnable, RfChannelDs.write_fbEnable, RfChannelDs.is_fbEnable_allowed)\nself.attr_fbEnable_read = False\n\"\"\"\n\"\"\"    For Attribute fdSetpoint\nmyfdSetpoint = PyTango.Attr('MyfdSetpoint', PyTango.DevDouble, PyTango.READ_WRITE)\nmyfdSetpoint.set_memorized()\nmyfdSetpoint.set_memorized_init(True)\nself.add_attribute(myfdSetpoint,RfChannelDs.read_fdSetpoint, RfChannelDs.write_fdSetpoint, RfChannelDs.is_fdSetpoint_allowed)\nself.attr_fdSetpoint_read = 0.0\n\"\"\"\n\"\"\"    For Attribute dacScalar\nmydacScalar = PyTango.Attr('MydacScalar', PyTango.DevDouble, PyTango.READ_WRITE)\nmydacScalar.set_memorized()\nmydacScalar.set_memorized_init(True)\nself.add_attribute(mydacScalar,RfChannelDs.read_dacScalar, RfChannelDs.write_dacScalar, RfChannelDs.is_dacScalar_allowed)\nself.attr_dacScalar_read = 0.0\n\"\"\"\n\"\"\"    For Attribute osc\nmyosc = PyTango.SpectrumAttr('Myosc', PyTango.DevDouble, PyTango.READ, 1000)\nself.add_attribute(myosc,RfChannelDs.read_osc, None, RfChannelDs.is_osc_allowed)\nself.attr_osc_read = [0.0]\n\"\"\""
+    },
+    {
+        "id": "class_RfChannelDs_method_read_interlockBit",
+        "input": "# Task: Implement method read_interlockBit in class RfChannelDs",
+        "output": "def read_interlockBit(self, attr):\nbit_num = dio_cfg['interlocks'][attr.get_name().lstrip('interlock_')]['bit']\nattr.set_value(not self._dio_dev.di_bit_rd(bit_num))"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_interlockBit_allowed",
+        "input": "# Task: Implement method is_interlockBit_allowed in class RfChannelDs",
+        "output": "def is_interlockBit_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_recent",
+        "input": "# Task: Implement method read_recent in class RfChannelDs",
+        "output": "def read_recent(self, attr):\nattr.set_value(self.recent_data[attr.get_name()])"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_recent_allowed",
+        "input": "# Task: Implement method is_recent_allowed in class RfChannelDs",
+        "output": "def is_recent_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_di_bit",
+        "input": "# Task: Implement method read_di_bit in class RfChannelDs",
+        "output": "def read_di_bit(self, attr):\nbit_num = dio_cfg['di_bits'][attr.get_name()]['bit']\nattr.set_value(self._dio_dev.di_bit_rd(bit_num))"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_di_bit_allowed",
+        "input": "# Task: Implement method is_di_bit_allowed in class RfChannelDs",
+        "output": "def is_di_bit_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_do_word",
+        "input": "# Task: Implement method read_do_word in class RfChannelDs",
+        "output": "def read_do_word(self, attr):\nbit_num = dio_cfg['do_words'][attr.get_name()]['bit']\nsize = dio_cfg['do_words'][attr.get_name()]['size']\nattr.set_value(self._dio_dev.do_bit_rd(bit_num, size))"
+    },
+    {
+        "id": "class_RfChannelDs_method_write_do_word",
+        "input": "# Task: Implement method write_do_word in class RfChannelDs",
+        "output": "def write_do_word(self, attr):\nbit_num = dio_cfg['do_words'][attr.get_name()]['bit']\nsize = dio_cfg['do_words'][attr.get_name()]['size']\nself._dio_dev.do_bit_wr(attr.get_write_value(), bit_num, size)\nif attr.get_name() == 'phaseShifter':\nself.phaseShifter_value = attr.get_write_value()\nself.setPhaseOffset(attr)"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_do_word_allowed",
+        "input": "# Task: Implement method is_do_word_allowed in class RfChannelDs",
+        "output": "def is_do_word_allowed(self, attr):\nif attr==attr.READ_REQ:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]\nelse:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_write_autoEnable",
+        "input": "# Task: Implement method write_autoEnable in class RfChannelDs",
+        "output": "def write_autoEnable(self, attr):\n_nm, att = attr.get_name().split('_')\nself.autoEnableDict[_nm] = attr.get_write_value()"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_autoEnable",
+        "input": "# Task: Implement method read_autoEnable in class RfChannelDs",
+        "output": "def read_autoEnable(self, attr):\n_nm, att = attr.get_name().split('_')\nattr.set_value(self.autoEnableDict[_nm])"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_fbLocked",
+        "input": "# Task: Implement method read_fbLocked in class RfChannelDs",
+        "output": "def read_fbLocked(self, attr):\nattr.set_value(self.fb_devs.fbRead_attr(attr.get_name()))"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_dacScalar",
+        "input": "# Task: Implement method read_dacScalar in class RfChannelDs",
+        "output": "def read_dacScalar(self, attr):\nattr.set_value(self._dac_dev.read_ao(attr.get_name().lstrip('ao_')))"
+    },
+    {
+        "id": "class_RfChannelDs_method_write_dacScalar",
+        "input": "# Task: Implement method write_dacScalar in class RfChannelDs",
+        "output": "def write_dacScalar(self, attr):\nself._dac_dev.write_ao(attr.get_name().lstrip('ao_'), attr.get_write_value())\nif attr.get_name() == 'ao_refPhaseOffsetSetpoint':\nself.ao_refPhaseOffsetSetpoint_value = attr.get_write_value()\nself.setPhaseOffset(attr)"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_dacScalar_allowed",
+        "input": "# Task: Implement method is_dacScalar_allowed in class RfChannelDs",
+        "output": "def is_dacScalar_allowed(self, attr):\nif attr==attr.READ_REQ:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]\nelse:\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_read_osc",
+        "input": "# Task: Implement method read_osc in class RfChannelDs",
+        "output": "def read_osc(self, attr):\nattr.set_value(self.osc_data[attr.get_name()])"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_osc_allowed",
+        "input": "# Task: Implement method is_osc_allowed in class RfChannelDs",
+        "output": "def is_osc_allowed(self, attr):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_clearInterlocks",
+        "input": "# Task: Implement method clearInterlocks in class RfChannelDs",
+        "output": "def clearInterlocks(self):\nself._modulatorFailure = False\nself._cavityRfFailure = False\nself._dio_dev.do_bit_wr(1, dio_cfg['do_pulsed']['clearInterlocks']['bit'])\nself._dio_dev.clear_alarm_0()\nself.turnedOnFlag = False\nself.autoEnableFlag.clear()\nself.autoEnableCnt = 0\nself._myself_dev.write_attribute(\"enableAGC\", False)\nself.fb_devs.turn_off()"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_clearInterlocks_allowed",
+        "input": "# Task: Implement method is_clearInterlocks_allowed in class RfChannelDs",
+        "output": "def is_clearInterlocks_allowed(self):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE, DevState.ON]"
+    },
+    {
+        "id": "class_RfChannelDs_method_modulatorOff",
+        "input": "# Task: Implement method modulatorOff in class RfChannelDs",
+        "output": "def modulatorOff(self):\nself._dio_dev.do_bit_wr(0, dio_cfg['do_bits']['modulatorOff']['bit'])\nself.set_modulator_off_flag = True\nself.turnedOnFlag = False\nself.autoEnableFlag.clear()\nself.autoEnableCnt = 0\nself._myself_dev.write_attribute(\"enableAGC\", False)\nself.fb_devs.turn_off()"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorOff_allowed",
+        "input": "# Task: Implement method is_modulatorOff_allowed in class RfChannelDs",
+        "output": "def is_modulatorOff_allowed(self):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_modulatorOn",
+        "input": "# Task: Implement method modulatorOn in class RfChannelDs",
+        "output": "def modulatorOn(self):\nself._dio_dev.do_bit_wr(1, dio_cfg['do_bits']['modulatorOff']['bit'])\nself._dio_dev.do_bit_wr(1, dio_cfg['do_pulsed']['modulatorOn']['bit'])\nif not self.alarm_state:\nself.autoEnableFlag = self.autoEnableDict.copy()\nself.autoEnableCnt = 0\nself._modulatorFailure = False\nself._cavityRfFailure = False"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_modulatorOn_allowed",
+        "input": "# Task: Implement method is_modulatorOn_allowed in class RfChannelDs",
+        "output": "def is_modulatorOn_allowed(self):\nreturn self.get_state() not in [DevState.FAULT, DevState.DISABLE]"
+    },
+    {
+        "id": "class_RfChannelDs_method_update",
+        "input": "# Task: Implement method update in class RfChannelDs",
+        "output": "def update(self):\ntry:\nif self.get_state() == PyTango.DevState.FAULT:\nself.fault_counter += 1\nif self.fault_counter == 10:\nself.fault_counter = 0\nif self.get_all_status():\nself._myself_dev.command_inout(\"Init\")\nelse:\nself.fault_counter = 0\nif self.get_state() not in [PyTango.DevState.FAULT]:\nif self.set_modulator_off_flag:\nself._dio_dev.do_bit_wr(1, dio_cfg['do_bits']['modulatorOff']['bit'])\nself.set_modulator_off_flag = False\nself._adc_dev.restart()\nself._dio_dev.update()\nself.alarm_state = False\nfor key,item in dio_cfg['interlocks'].items():\nbit_num = item['bit']\nif not self._dio_dev.di_bit_rd(bit_num):\nself.set_state(PyTango.DevState.ALARM)\nself.alarm_state = True\nself.autoEnableFlag.clear()\nbreak\nif not self.alarm_state:\nif self._dio_dev.di_bit_rd(dio_cfg['di_bits']['modulatorIsOn']['bit']):\nself.set_state(PyTango.DevState.ON)\nself.turnedOnFlag = True\nelse:\nself.set_state(PyTango.DevState.STANDBY)\nif any(set(self.autoEnableFlag.values())):\nif self._dio_dev.di_bit_rd(dio_cfg['di_bits']['modulatorReady']['bit']):\nself.autoEnableCnt += 1\nfor key,val in self.autoEnableFlag.items():\nif (self.autoEnableCnt > 7) and (key == 'agc') and val:\nself._myself_dev.write_attribute(\"enableAGC\", True)\nself.autoEnableFlag[key] = False\nif (self.autoEnableCnt > 2) and (key != 'agc') and val:\nself.fb_devs.fbWrite_attr(key+'_enable', True)\nself.autoEnableFlag[key] = False\nelse:\nself.autoEnableFlag.clear()\nif not any(set(self.autoEnableFlag.values())):\nself.autoEnableCnt = 0\nif self.turnedOnFlag and (self.alarm_state or \\\n(not self._dio_dev.di_bit_rd(dio_cfg['di_bits']['modulatorReady']['bit']) )\n):\nself.turnedOnFlag = False\nself._modulatorFailure = True\nself.push_change_event('modulatorFailure', self._modulatorFailure)\nself.fb_update_counter += 1\nif self.fb_update_counter == 10:\nself.fb_update_counter = 0\nself.fb_devs.update_all_initial()\nexcept PyTango.DevFailed as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"Error type 1 in update():\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)\nexcept Exception as e:\nself.set_state(PyTango.DevState.FAULT)\ne_desc = \"\"\"Error type 2 in update():\\n\"%s\"!\"\"\"%str(e)\nprint(e_desc)\nself.set_status(e_desc)"
+    },
+    {
+        "id": "class_RfChannelDs_method_is_update_allowed",
+        "input": "# Task: Implement method is_update_allowed in class RfChannelDs",
+        "output": "def is_update_allowed(self):\nreturn self.get_state() not in [DevState.DISABLE]"
+    },
+    {
+        "id": "function_main",
+        "input": "# Task: Implement function main",
+        "output": "def main(args=None, **kwargs):\nreturn run((RfChannelDs,), args=args, **kwargs)"
+    }
+]
