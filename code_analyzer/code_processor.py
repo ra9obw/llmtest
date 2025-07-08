@@ -9,6 +9,18 @@ from element_tracker import ElementTracker
 from file_processor import FileProcessor
 
 
+import os
+import json
+import re
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Callable, Set
+from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
+from interfaces import IElementTracker, IFileProcessor
+from element_tracker import ElementTracker
+from file_processor import FileProcessor
+from structure_models.storage import JsonDataStorage
+
+
 class CodeExtractor:
     """Extracts code structures (classes, functions, templates, etc.) from C++ source files."""
     
@@ -16,7 +28,8 @@ class CodeExtractor:
                  repo_path: str, 
                  skip_files_func: Optional[Callable[[str], bool]] = None,
                  element_tracker: Optional[IElementTracker] = None,
-                 file_processor: Optional[IFileProcessor] = None) -> None:
+                 file_processor: Optional[IFileProcessor] = None,
+                 data_storage: Optional[JsonDataStorage] = None) -> None:
         """Initialize the code extractor with repository path and optional dependencies."""
         self.repo_path = Path(repo_path).resolve()
         self.index = Index.create()
@@ -25,19 +38,7 @@ class CodeExtractor:
         # Initialize dependencies
         self.element_tracker = element_tracker or ElementTracker()
         self.file_processor = file_processor or FileProcessor(self.repo_path)
-        
-        # Data storage
-        self.classes: Dict[str, Dict] = {}
-        self.class_templates: Dict[str, Dict] = {}
-        self.functions: List[Dict] = []
-        self.templates: List[Dict] = []
-        self.namespaces: List[Dict] = []
-        self.lambdas: List[Dict] = []
-        self.macros: List[Dict] = []
-        self.preprocessor_directives: List[Dict] = []
-        self.error_handlers: List[Dict] = []
-        self.literals: List[Dict] = []
-        self.attributes: List[Dict] = []
+        self.data_storage = data_storage or JsonDataStorage()
 
     def _get_relative_path(self, absolute_path: str) -> str:
         """Convert absolute path to relative path from repo root."""
@@ -393,12 +394,12 @@ class CodeExtractor:
         
         element_id = self.element_tracker.generate_element_id(cursor, "class")
         
-        if self.element_tracker.is_processed(element_id) or class_name in self.classes:
+        if self.element_tracker.is_processed(element_id) or class_name in self.data_storage.classes:
             return
             
         self.element_tracker.mark_processed(element_id)
         
-        self.classes[class_name] = {
+        class_data = {
             "type": "class",
             "name": class_name,
             "declaration": self._get_code_snippet(cursor),
@@ -406,6 +407,8 @@ class CodeExtractor:
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
+        
+        self.data_storage.add_class(class_data)
 
     def _process_namespace(self, cursor) -> None:
         """Process a namespace declaration."""
@@ -417,12 +420,14 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.namespaces.append({
+        namespace_data = {
             "type": "namespace",
             "name": namespace_name,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_namespace(namespace_data)
 
     def _process_class_template(self, cursor) -> None:
         """Process a class template declaration."""
@@ -432,7 +437,7 @@ class CodeExtractor:
         
         element_id = self.element_tracker.generate_element_id(cursor, "class_template")
         
-        if self.element_tracker.is_processed(element_id) or template_name in self.class_templates:
+        if self.element_tracker.is_processed(element_id) or template_name in self.data_storage.class_templates:
             return
             
         self.element_tracker.mark_processed(element_id)
@@ -440,7 +445,7 @@ class CodeExtractor:
         # Get full template class definition
         code = self._get_code_snippet(cursor)
         
-        self.class_templates[template_name] = {
+        template_data = {
             "type": "class_template",
             "name": template_name,
             "code": code,
@@ -449,6 +454,8 @@ class CodeExtractor:
             "line": cursor.location.line,
             "template_parameters": self._get_template_parameters(cursor)
         }
+        
+        self.data_storage.add_class_template(template_data)
 
     def _process_function(self, cursor) -> None:
         """Process a free function definition with overload support."""
@@ -483,7 +490,7 @@ class CodeExtractor:
             function_info["is_overloaded"] = True
             function_info["overload_count"] = len(overloads) + 1
 
-        self.functions.append(function_info)
+        self.data_storage.add_function(function_info)
 
     def _find_function_overloads(self, cursor) -> List[Dict]:
         """Find all overloads of the given function with error handling."""
@@ -605,18 +612,18 @@ class CodeExtractor:
                 method_info["is_overloaded"] = True
                 method_info["overload_count"] = len(overloads) + 1
             
-            if parent_name not in self.class_templates:
+            if parent_name not in self.data_storage.class_templates:
                 self._process_class_template(parent)
-            self.class_templates[parent_name]["methods"].append(method_info)
+            self.data_storage.class_templates[parent_name]["methods"].append(method_info)
         else:
             overloads = self._find_method_overloads(cursor, parent)
             if overloads:
                 method_info["is_overloaded"] = True
                 method_info["overload_count"] = len(overloads) + 1
             
-            if parent_name not in self.classes:
+            if parent_name not in self.data_storage.classes:
                 self._process_class(parent)
-            self.classes[parent_name]["methods"].append(method_info)
+            self.data_storage.classes[parent_name]["methods"].append(method_info)
 
     def _find_method_overloads(self, cursor, parent) -> List[Dict]:
         """Find all overloads of the given method in its parent class with error handling."""
@@ -725,16 +732,16 @@ class CodeExtractor:
             
             if parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
                 method_info["parent_template"] = parent_name
-                if parent_name not in self.class_templates:
+                if parent_name not in self.data_storage.class_templates:
                     self._process_class_template(parent)
-                self.class_templates[parent_name]["methods"].append(method_info)
+                self.data_storage.class_templates[parent_name]["methods"].append(method_info)
             else:
-                if parent_name not in self.classes:
+                if parent_name not in self.data_storage.classes:
                     self._process_class(parent)
-                self.classes[parent_name]["methods"].append(method_info)
+                self.data_storage.classes[parent_name]["methods"].append(method_info)
         else:
             # Regular function template
-            self.templates.append({
+            template_data = {
                 "type": "template",
                 "name": cursor.spelling,
                 "code": code,
@@ -743,7 +750,9 @@ class CodeExtractor:
                 "line": cursor.location.line,
                 "template_parameters": self._get_template_parameters(cursor),
                 "signature": self._get_function_signature(cursor)
-            })
+            }
+            
+            self.data_storage.add_function_template(template_data)
 
     def _process_lambda(self, cursor) -> None:
         """Process a lambda expression."""
@@ -756,12 +765,14 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.lambdas.append({
+        lambda_data = {
             "type": "lambda",
             "code": code,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_lambda(lambda_data)
 
     def _process_preprocessor_directive(self, cursor) -> None:
         """Process a preprocessor directive (#ifdef, #pragma, etc.)."""
@@ -774,13 +785,15 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.preprocessor_directives.append({
+        directive_data = {
             "type": "preprocessor",
             "directive": cursor.spelling,
             "code": code,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_preprocessor_directive(directive_data)
 
     def _process_error_handler(self, cursor) -> None:
         """Process a try-catch block."""
@@ -793,12 +806,14 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.error_handlers.append({
+        handler_data = {
             "type": "error_handler",
             "code": code,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_error_handler(handler_data)
 
     def _process_macro(self, cursor) -> None:
         """Process a macro definition."""
@@ -811,12 +826,14 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.macros.append({
+        macro_data = {
             "type": "macro",
             "name": cursor.spelling,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_macro(macro_data)
 
     def _process_literal(self, cursor) -> None:
         """Process a user-defined literal."""
@@ -829,13 +846,15 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.literals.append({
+        literal_data = {
             "type": "literal",
             "name": cursor.spelling,
             "code": self._get_code_snippet(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_literal(literal_data)
 
     def _process_attribute(self, cursor) -> None:
         """Process a C++ attribute ([[...]])."""
@@ -848,13 +867,15 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        self.attributes.append({
+        attribute_data = {
             "type": "attribute",
             "name": cursor.spelling,
             "code": self._get_code_snippet(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
-        })
+        }
+        
+        self.data_storage.add_attribute(attribute_data)
 
     def process_file(self, file_path: Path) -> None:
         """Process a single source file."""
@@ -920,39 +941,21 @@ class CodeExtractor:
 
     def get_results(self) -> List[Dict[str, Any]]:
         """Get all extracted code structures."""
-        results = []
-        results.extend(cls for cls in self.classes.values() if cls["methods"])
-        results.extend(cls_tmpl for cls_tmpl in self.class_templates.values() if cls_tmpl["methods"])
-        results.extend(self.functions)
-        results.extend(self.templates)
-        results.extend(self.namespaces)
-        results.extend(self.lambdas)
-        results.extend(self.error_handlers)
-        results.extend(self.macros)
-        results.extend(self.preprocessor_directives)
-        results.extend(self.literals)
-        results.extend(self.attributes)
-        return results
+        return self.data_storage.get_all_data()
 
     @property
     def unprocessed_stats(self) -> Dict[str, Dict[str, int]]:
         """Get statistics about unprocessed elements."""
         return self.element_tracker.unprocessed_stats
     
+
 def main() -> None:
-    # Укажите путь к libclang.dll
     Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
-    # Настройки путей
     BASE_ROOT = r"C:\\work\\llm_test"
-    # PROJ_NAME = r"adc4x250"
     PROJ_NAME = r"simple"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
-    # REPO_PATH = r"C:\\work\\pavlenko\\llm_test\\codebase\\simple"
-    
-    # OUTPUT_JSONL = r"C:\\work\\pavlenko\\llm_test\\dataset_clang_test.jsonl"
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
     
-
     tango_generated_stop_list = [
         "main.cpp",
         "*Class.cpp",
@@ -963,19 +966,18 @@ def main() -> None:
     ]
 
     def should_skip_file(filename):
-        """Check if file should be skipped based on stop list"""
         for pattern in tango_generated_stop_list:
             if pattern.startswith('*'):
-                # Pattern matches end of filename
                 if filename.endswith(pattern[1:]):
                     return True
             else:
-                # Exact match
                 if filename == pattern:
                     return True
         return False
         
-    extractor = CodeExtractor(REPO_PATH, should_skip_file)
+    # Initialize data storage with output path
+    data_storage = JsonDataStorage(OUTPUT_JSONL)
+    extractor = CodeExtractor(REPO_PATH, should_skip_file, data_storage=data_storage)
 
     file_count = 0
     for root, _, files in os.walk(REPO_PATH):
@@ -987,38 +989,15 @@ def main() -> None:
 
                 file_path = Path(root) / file
                 print(f"\nProcessing: {file_path}")
-                # try:
-                if True:
+                try:
                     extractor.process_file(file_path)
                     file_count += 1
-                # except Exception as e:
-                #     print(f"[ERROR] Failed to process {file_path}: {e}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to process {file_path}: {e}")
     
-    print(f"\nProcessed {file_count} files")
-    print(f"Found {len(extractor.classes)} classes")
-    print(f"Found {len(extractor.functions)} functions")
-    print(f"Found {len(extractor.templates)} templates")
-    print(f"Found {len(extractor.class_templates)} class templates")
-    print(f"Found {len(extractor.namespaces)} namespaces")
-    print(f"Found {len(extractor.lambdas)} lambdas")
-    print(f"Found {len(extractor.macros)} macros")
-    print(f"Found {len(extractor.preprocessor_directives)} preprocessor directives")
-    print(f"Found {len(extractor.literals)} user-defined literals")
-    print(f"Found {len(extractor.attributes)} attributes")
-    print(f"Found {len(extractor.error_handlers)} error_handlers")
-    
-    # Print unprocessed kinds statistics
-    if extractor.element_tracker.unprocessed_unexpected:
-        print("\nUnprocessed cursor kinds:")
-        for kind, count in sorted(extractor.element_tracker.unprocessed_unexpected.items(), key=lambda x: x[1], reverse=True):
-            print(f"{kind}: {count}")
-    else:
-        print("\nAll cursor kinds were processed")
-    
-    with open(OUTPUT_JSONL, 'w', encoding='utf-8') as f:
-        for item in extractor.get_results():
-            json.dump(item, f, ensure_ascii=False)
-            f.write('\n')
+    # Print statistics and save results
+    data_storage.print_statistics(extractor.unprocessed_stats)
+    data_storage.save_to_file()
     
     print(f"Results saved to {OUTPUT_JSONL}")
 

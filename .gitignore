@@ -5,7 +5,7 @@
 codebase/adc4x250
 codebase/cppTango-9.3.7
 codebase/llrf-hw
-*/__pycache__
+*__pycache__*
 logs
 models
 models_gguf
