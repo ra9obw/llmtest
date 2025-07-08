@@ -2,19 +2,29 @@ import os
 import json
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable, Set
 from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
+from interfaces import IElementTracker, IFileProcessor
+from element_tracker import ElementTracker
+from file_processor import FileProcessor
 
 
 class CodeExtractor:
     """Extracts code structures (classes, functions, templates, etc.) from C++ source files."""
     
-    def __init__(self, repo_path: str, skip_files_func = None) -> None:
-        """Initialize the code extractor with repository path."""
+    def __init__(self, 
+                 repo_path: str, 
+                 skip_files_func: Optional[Callable[[str], bool]] = None,
+                 element_tracker: Optional[IElementTracker] = None,
+                 file_processor: Optional[IFileProcessor] = None) -> None:
+        """Initialize the code extractor with repository path and optional dependencies."""
         self.repo_path = Path(repo_path).resolve()
         self.index = Index.create()
-        self.include_dirs = self._find_include_dirs()
         self.skip_files_func = skip_files_func
+        
+        # Initialize dependencies
+        self.element_tracker = element_tracker or ElementTracker()
+        self.file_processor = file_processor or FileProcessor(self.repo_path)
         
         # Data storage
         self.classes: Dict[str, Dict] = {}
@@ -28,61 +38,7 @@ class CodeExtractor:
         self.error_handlers: List[Dict] = []
         self.literals: List[Dict] = []
         self.attributes: List[Dict] = []
-        
-        # Track all processed elements to avoid duplicates
-        self._processed_elements = set()
-        
-        # Track unprocessed cursor kinds
-        self.unprocessed_expected: Dict[str, int] = {}
-        self.unprocessed_unexpected: Dict[str, int] = {}
-        self.expected_unprocessed = (
-                                        CursorKind.DECL_REF_EXPR,
-                                        CursorKind.UNEXPOSED_EXPR,
-                                        CursorKind.CALL_EXPR,
-                                        CursorKind.PARM_DECL,
-                                        CursorKind.TYPE_REF,
-                                        CursorKind.NAMESPACE_REF,
-                                        CursorKind.CXX_ACCESS_SPEC_DECL,
-                                        CursorKind.COMPOUND_STMT,
-                                        CursorKind.STRING_LITERAL,
-                                        CursorKind.TEMPLATE_TYPE_PARAMETER,
-                                        CursorKind.DECL_STMT,
-                                        CursorKind.VAR_DECL,
-                                        CursorKind.TEMPLATE_REF
-                                    )
 
-    def _find_include_dirs(self) -> List[str]:
-        """Find all include directories in the repository."""
-        include_dirs = [str(self.repo_path)]
-        for root, dirs, _ in os.walk(self.repo_path):
-            if 'include' in dirs:
-                include_dirs.append(str(Path(root) / 'include'))
-        return include_dirs
-
-    def _get_compiler_args(self) -> List[str]:
-        """Get compiler arguments for clang parsing."""
-        args = [
-            '-std=c++17',
-            '-x', 'c++',
-            '-fparse-all-comments',
-            '-D__clang__'
-        ]
-        args.extend(arg for include_dir in self.include_dirs 
-                   for arg in ['-I', include_dir])
-        return args
-    
-    def _is_system_header(self, file_path: Optional[str]) -> bool:
-        """Check if the file is a system header."""
-        if not file_path:
-            return True
-        return file_path.startswith('/usr/include') or \
-               file_path.startswith('/usr/local/include') or \
-               file_path.startswith('/Applications/Xcode.app/') or \
-               file_path.startswith('C:\\Program Files (x86)\\Microsoft Visual Studio') or \
-               file_path.startswith('C:\\Program Files\\Microsoft Visual Studio') or \
-               '\\Windows Kits\\' in file_path or \
-               file_path.startswith('<')
-    
     def _get_relative_path(self, absolute_path: str) -> str:
         """Convert absolute path to relative path from repo root."""
         try:
@@ -114,12 +70,6 @@ class CodeExtractor:
         """
         Get sorted list of all cursor positions in the same file that are
         at the same level or higher in hierarchy compared to current cursor.
-        
-        Args:
-            cursor: The reference cursor to compare against
-            
-        Returns:
-            List[Dict]: Sorted list of cursor positions with hierarchy info
         """
         if not cursor or not cursor.location.file:
             return []
@@ -185,12 +135,6 @@ class CodeExtractor:
         Get the position of the next cursor after the current one in the file,
         considering only cursors at the same or higher hierarchy level.
         Returns None if current cursor is the last one.
-        
-        Args:
-            cursor: The reference cursor to compare against
-            
-        Returns:
-            Optional[Dict]: Position info of next cursor or None if not found
         """
         siblings = self.get_sibling_and_parent_positions(cursor)
         
@@ -360,90 +304,6 @@ class CodeExtractor:
             print(f"[ERROR] Failed to read {cursor.location.file}: {e}")
             return None
 
-    def _get_element_id(self, cursor, element_type: str) -> str:
-        """Generate unique ID for an element to detect duplicates."""
-        location = self._get_relative_path(cursor.location.file.name)
-        return f"{element_type}:{location}:{cursor.location.line}:{cursor.spelling}"
-
-    def _is_processed(self, element_id: str) -> bool:
-        """Check if element was already processed."""
-        return element_id in self._processed_elements
-
-    def _mark_processed(self, element_id: str) -> None:
-        """Mark element as processed."""
-        self._processed_elements.add(element_id)
-
-    def _process_unhandled_kind(self, cursor) -> None:
-        """Track unhandled cursor kinds."""
-        kind_name = str(cursor.kind)
-        if cursor.kind in self.expected_unprocessed:
-            self.unprocessed_expected[kind_name] = self.unprocessed_expected.get(kind_name, 0) + 1
-        else:
-            self.unprocessed_unexpected[kind_name] = self.unprocessed_unexpected.get(kind_name, 0) + 1
-
-    def _process_class(self, cursor) -> None:
-        """Process a class/struct declaration."""
-        class_name = cursor.spelling
-        
-        element_id = self._get_element_id(cursor, "class")
-        
-        if self._is_processed(element_id) or class_name in self.classes:
-            return
-            
-        self._mark_processed(element_id)
-        
-        self.classes[class_name] = {
-            "type": "class",
-            "name": class_name,
-            "declaration": self._get_code_snippet(cursor),
-            "methods": [],
-            "location": self._get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
-        }
-
-    def _process_namespace(self, cursor) -> None:
-        """Process a namespace declaration."""
-        namespace_name = cursor.spelling or "(anonymous)"
-        element_id = self._get_element_id(cursor, "namespace")
-        
-        if self._is_processed(element_id):
-            return
-            
-        self._mark_processed(element_id)
-        
-        self.namespaces.append({
-            "type": "namespace",
-            "name": namespace_name,
-            "location": self._get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
-        })
-
-    def _process_class_template(self, cursor) -> None:
-        """Process a class template declaration."""
-        template_name = cursor.spelling
-        if not template_name:  # For anonymous template classes
-            template_name = f"anonymous_template_at_{cursor.location.line}"
-        
-        element_id = self._get_element_id(cursor, "class_template")
-        
-        if self._is_processed(element_id) or template_name in self.class_templates:
-            return
-            
-        self._mark_processed(element_id)
-        
-        # Get full template class definition
-        code = self._get_code_snippet(cursor)
-        
-        self.class_templates[template_name] = {
-            "type": "class_template",
-            "name": template_name,
-            "code": code,
-            "methods": [],
-            "location": self._get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "template_parameters": self._get_template_parameters(cursor)
-        }
-
     def _get_function_signature(self, cursor) -> Dict[str, Any]:
         """Extract detailed function signature information."""
         signature = {
@@ -523,9 +383,72 @@ class CodeExtractor:
 
     def _generate_overload_id(self, cursor) -> str:
         """Generate unique ID for function overloads considering parameters."""
-        base_id = self._get_element_id(cursor, "function")
+        element_id = self.element_tracker.generate_element_id(cursor, "function")
         param_types = [arg.type.spelling for arg in cursor.get_arguments()]
-        return f"{base_id}:{':'.join(param_types)}"
+        return f"{element_id}:{':'.join(param_types)}"
+
+    def _process_class(self, cursor) -> None:
+        """Process a class/struct declaration."""
+        class_name = cursor.spelling
+        
+        element_id = self.element_tracker.generate_element_id(cursor, "class")
+        
+        if self.element_tracker.is_processed(element_id) or class_name in self.classes:
+            return
+            
+        self.element_tracker.mark_processed(element_id)
+        
+        self.classes[class_name] = {
+            "type": "class",
+            "name": class_name,
+            "declaration": self._get_code_snippet(cursor),
+            "methods": [],
+            "location": self._get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line
+        }
+
+    def _process_namespace(self, cursor) -> None:
+        """Process a namespace declaration."""
+        namespace_name = cursor.spelling or "(anonymous)"
+        element_id = self.element_tracker.generate_element_id(cursor, "namespace")
+        
+        if self.element_tracker.is_processed(element_id):
+            return
+            
+        self.element_tracker.mark_processed(element_id)
+        
+        self.namespaces.append({
+            "type": "namespace",
+            "name": namespace_name,
+            "location": self._get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line
+        })
+
+    def _process_class_template(self, cursor) -> None:
+        """Process a class template declaration."""
+        template_name = cursor.spelling
+        if not template_name:  # For anonymous template classes
+            template_name = f"anonymous_template_at_{cursor.location.line}"
+        
+        element_id = self.element_tracker.generate_element_id(cursor, "class_template")
+        
+        if self.element_tracker.is_processed(element_id) or template_name in self.class_templates:
+            return
+            
+        self.element_tracker.mark_processed(element_id)
+        
+        # Get full template class definition
+        code = self._get_code_snippet(cursor)
+        
+        self.class_templates[template_name] = {
+            "type": "class_template",
+            "name": template_name,
+            "code": code,
+            "methods": [],
+            "location": self._get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "template_parameters": self._get_template_parameters(cursor)
+        }
 
     def _process_function(self, cursor) -> None:
         """Process a free function definition with overload support."""
@@ -534,10 +457,10 @@ class CodeExtractor:
 
         element_id = self._generate_overload_id(cursor)
         
-        if self._is_processed(element_id):
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         code = self._get_code_snippet(cursor)
         if not code:
@@ -644,10 +567,10 @@ class CodeExtractor:
         parent_name = parent.spelling or f"anon_at_{parent.location.line}"
         element_id = f"method:{parent_name}::{self._generate_overload_id(cursor)}"
         
-        if self._is_processed(element_id):
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         # Get both declaration and full body for template methods
         code = self._get_code_snippet(cursor)
@@ -768,11 +691,11 @@ class CodeExtractor:
         if not (code := self._get_code_snippet(cursor)):
             return
             
-        element_id = self._get_element_id(cursor, "template")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "template")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         # Get full body for template functions
         full_body = self._get_template_method_body(cursor)
@@ -827,11 +750,11 @@ class CodeExtractor:
         if not (code := self._get_code_snippet(cursor)):
             return
             
-        element_id = self._get_element_id(cursor, "lambda")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "lambda")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.lambdas.append({
             "type": "lambda",
@@ -845,11 +768,11 @@ class CodeExtractor:
         if not (code := self._get_code_snippet(cursor)):
             return
             
-        element_id = self._get_element_id(cursor, "preprocessor")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "preprocessor")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.preprocessor_directives.append({
             "type": "preprocessor",
@@ -864,11 +787,11 @@ class CodeExtractor:
         if not (code := self._get_code_snippet(cursor)):
             return
             
-        element_id = self._get_element_id(cursor, "error_handler")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "error_handler")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.error_handlers.append({
             "type": "error_handler",
@@ -882,11 +805,11 @@ class CodeExtractor:
         if not cursor.spelling:
             return
             
-        element_id = self._get_element_id(cursor, "macro")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "macro")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.macros.append({
             "type": "macro",
@@ -900,11 +823,11 @@ class CodeExtractor:
         if not cursor.spelling:
             return
             
-        element_id = self._get_element_id(cursor, "literal")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "literal")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.literals.append({
             "type": "literal",
@@ -919,11 +842,11 @@ class CodeExtractor:
         if not cursor.spelling:
             return
             
-        element_id = self._get_element_id(cursor, "attribute")
-        if self._is_processed(element_id):
+        element_id = self.element_tracker.generate_element_id(cursor, "attribute")
+        if self.element_tracker.is_processed(element_id):
             return
             
-        self._mark_processed(element_id)
+        self.element_tracker.mark_processed(element_id)
         
         self.attributes.append({
             "type": "attribute",
@@ -935,10 +858,7 @@ class CodeExtractor:
 
     def process_file(self, file_path: Path) -> None:
         """Process a single source file."""
-        translation_unit = self.index.parse(
-            str(file_path),
-            args=self._get_compiler_args()
-        )
+        translation_unit = self.file_processor.parse_file(file_path, self.skip_files_func)
         
         if not translation_unit:
             return
@@ -948,7 +868,7 @@ class CodeExtractor:
             if cursor.kind == CursorKind.TRANSLATION_UNIT:
                 pass
             else:
-                if self._is_system_header(cursor.location.file.name if cursor.location.file else None):
+                if self.file_processor.is_system_header(cursor.location.file.name if cursor.location.file else None):
                     return
                 
                 if self.skip_files_func and self.skip_files_func(self._get_relative_path(cursor.location.file.name)):
@@ -990,7 +910,7 @@ class CodeExtractor:
                 elif cursor.kind == CursorKind.ANNOTATE_ATTR:
                     self._process_attribute(cursor)
                 else:
-                    self._process_unhandled_kind(cursor)
+                    self.element_tracker.track_unhandled_kind(cursor)
                 
             # Process children
             for child in cursor.get_children():
@@ -1014,7 +934,11 @@ class CodeExtractor:
         results.extend(self.attributes)
         return results
 
-
+    @property
+    def unprocessed_stats(self) -> Dict[str, Dict[str, int]]:
+        """Get statistics about unprocessed elements."""
+        return self.element_tracker.unprocessed_stats
+    
 def main() -> None:
     # Укажите путь к libclang.dll
     Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
@@ -1084,9 +1008,9 @@ def main() -> None:
     print(f"Found {len(extractor.error_handlers)} error_handlers")
     
     # Print unprocessed kinds statistics
-    if extractor.unprocessed_unexpected:
+    if extractor.element_tracker.unprocessed_unexpected:
         print("\nUnprocessed cursor kinds:")
-        for kind, count in sorted(extractor.unprocessed_unexpected.items(), key=lambda x: x[1], reverse=True):
+        for kind, count in sorted(extractor.element_tracker.unprocessed_unexpected.items(), key=lambda x: x[1], reverse=True):
             print(f"{kind}: {count}")
     else:
         print("\nAll cursor kinds were processed")
