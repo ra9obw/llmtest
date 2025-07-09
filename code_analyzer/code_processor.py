@@ -19,7 +19,8 @@ from interfaces import IElementTracker, IFileProcessor
 from element_tracker import ElementTracker
 from file_processor import FileProcessor
 from structure_models.storage import JsonDataStorage
-
+from code_processing.range_locator import RangeLocator
+from code_processing.template_extractor import TemplateBodyExtractor
 
 class CodeExtractor:
     """Extracts code structures (classes, functions, templates, etc.) from C++ source files."""
@@ -29,7 +30,8 @@ class CodeExtractor:
                  skip_files_func: Optional[Callable[[str], bool]] = None,
                  element_tracker: Optional[IElementTracker] = None,
                  file_processor: Optional[IFileProcessor] = None,
-                 data_storage: Optional[JsonDataStorage] = None) -> None:
+                 data_storage: Optional[JsonDataStorage] = None,
+                 log_level: int = 0) -> None:
         """Initialize the code extractor with repository path and optional dependencies."""
         self.repo_path = Path(repo_path).resolve()
         self.index = Index.create()
@@ -40,270 +42,36 @@ class CodeExtractor:
         self.file_processor = file_processor or FileProcessor(self.repo_path)
         self.data_storage = data_storage or JsonDataStorage()
 
+        self.log_level = log_level
+        # Cursor kinds we're interested in for position tracking
+        self._RELEVANT_CURSOR_KINDS = {
+            CursorKind.CLASS_DECL,
+            CursorKind.STRUCT_DECL,
+            CursorKind.CLASS_TEMPLATE,
+            CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+            CursorKind.FUNCTION_DECL,
+            CursorKind.CXX_METHOD,
+            CursorKind.FUNCTION_TEMPLATE,
+            CursorKind.NAMESPACE,
+            CursorKind.LAMBDA_EXPR,
+            CursorKind.TEMPLATE_TYPE_PARAMETER
+        }
+        # Initialize helper classes
+        self.range_locator = RangeLocator(self._RELEVANT_CURSOR_KINDS, self.file_processor)
+        self.template_extractor = TemplateBodyExtractor(self.range_locator)
+    
+    def log(self, _str, severity = 'note'):
+        if severity == 'critical':
+            print(_str)
+        elif severity == 'note' and self.log_level >= 1:
+            print(_str)
+
     def _get_relative_path(self, absolute_path: str) -> str:
         """Convert absolute path to relative path from repo root."""
         try:
             return str(Path(absolute_path).resolve().relative_to(self.repo_path))
         except ValueError:
             return absolute_path
-
-    def _clean_code(self, code: str) -> str:
-        """Clean code while preserving meaningful indentation."""
-        if not code:
-            return code
-
-        lines = code.split('\n')
-        lines = [line.rstrip() for line in lines]
-        
-        while lines and not lines[0].strip():
-            lines.pop(0)
-        
-        while lines and not lines[-1].strip():
-            lines.pop()
-        
-        lines = [line.replace('\t', '    ') for line in lines]
-        code = '\n'.join(lines)
-        code = re.sub(r'\n{3,}', '\n\n', code)
-        
-        return code
-
-    def get_sibling_and_parent_positions(self, cursor):
-        """
-        Get sorted list of all cursor positions in the same file that are
-        at the same level or higher in hierarchy compared to current cursor.
-        """
-        if not cursor or not cursor.location.file:
-            return []
-        
-        file_path = cursor.location.file.name
-        current_file_cursors = []
-        
-        # Get translation unit for the file
-        translation_unit = cursor.translation_unit
-        
-        # Collect all cursors in the file with their hierarchy level
-        def collect_cursors(node, level=0):
-            if node.location.file and node.location.file.name == file_path:
-                current_file_cursors.append({
-                    "cursor": node,
-                    "level": level,
-                    "line": node.location.line,
-                    "column": node.location.column,
-                    "file": node.location.file.name
-                })
-            
-            for child in node.get_children():
-                collect_cursors(child, level + 1)
-        
-        collect_cursors(translation_unit.cursor)
-        
-        # Filter cursors that are at same level or higher than our cursor
-        # First find our cursor's level
-        current_level = None
-        for c in current_file_cursors:
-            if c["cursor"] == cursor:
-                current_level = c["level"]
-                break
-        
-        if current_level is None:
-            return []
-        
-        # Get all cursors at same or higher level (lower or equal level number)
-        filtered_cursors = [
-            c for c in current_file_cursors 
-            if c["level"] <= current_level
-        ]
-        
-        # Sort by position in file (line, column)
-        filtered_cursors.sort(key=lambda x: (x["line"], x["column"]))
-        
-        # Prepare result with relevant information
-        result = []
-        for c in filtered_cursors:
-            result.append({
-                "file": c["file"],
-                "line": c["line"],
-                "column": c["column"],
-                "level": c["level"],
-                "kind": str(c["cursor"].kind),
-                "is_current": c["cursor"] == cursor
-            })
-        
-        return result
-    
-    def get_next_cursor_position(self, cursor):
-        """
-        Get the position of the next cursor after the current one in the file,
-        considering only cursors at the same or higher hierarchy level.
-        Returns None if current cursor is the last one.
-        """
-        siblings = self.get_sibling_and_parent_positions(cursor)
-        
-        if not siblings:
-            return None
-        
-        # Find current cursor in the list
-        current_index = None
-        for i, sibling in enumerate(siblings):
-            if sibling["is_current"]:
-                current_index = i
-                break
-        
-        if current_index is None:
-            return None
-        
-        # Check if there's a next element
-        if current_index + 1 < len(siblings):
-            next_cursor = siblings[current_index + 1]
-            return {
-                "file":   next_cursor["file"],
-                "line":   next_cursor["line"],
-                "column": next_cursor["column"],
-                "level":  next_cursor["level"],
-                "kind":   next_cursor["kind"]
-            }
-        
-        return None
-        
-    def _get_template_method_body(self, cursor) -> Optional[str]:
-        """
-        Extracts the complete method body (with curly braces) for template and non-template methods.
-        Uses get_next_cursor_position to limit the search range for better performance and accuracy.
-        If next cursor is None, searches until end of file.
-        """
-        if not cursor.location.file:
-            return None
-
-        try:
-            with open(cursor.location.file.name, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
-
-            # Convert to 0-based offsets
-            start_pos = self._get_offset(cursor.extent.start)
-            end_pos = self._get_offset(cursor.extent.end)
-            
-            # Get next cursor position to limit search range
-            next_cursor_info = self.get_next_cursor_position(cursor)
-            search_end = len(content) if next_cursor_info is None else self._get_offset_from_position(
-                next_cursor_info['file'], 
-                next_cursor_info['line'], 
-                next_cursor_info['column']
-            )
-            
-            # Find the opening brace after the function declaration
-            brace_pos = content.find('{', end_pos, search_end)
-            if brace_pos == -1:
-                return None
-
-            # Now find the matching closing brace within the limited range
-            brace_count = 1
-            current_pos = brace_pos + 1
-            end_brace_pos = -1
-
-            while current_pos < search_end and brace_count > 0:
-                char = content[current_pos]
-                if char == '{':
-                    brace_count += 1
-                elif char == '}':
-                    brace_count -= 1
-                    if brace_count == 0:
-                        end_brace_pos = current_pos
-                        break
-                current_pos += 1
-
-            if end_brace_pos == -1:
-                return None
-
-            # Extract the complete method body
-            method_body = content[brace_pos:end_brace_pos+1]
-            return self._clean_code(method_body)
-
-        except Exception as e:
-            print(f"[ERROR] Failed to extract method body: {e}")
-            return None
-
-    def _get_offset_from_position(self, file_path: str, line: int, column: int) -> int:
-        """
-        Helper method to convert file position (line, column) to file offset.
-        """
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.readlines()
-            
-            # Convert to 0-based line number
-            line = max(0, line - 1)
-            if line >= len(content):
-                return sum(len(line) for line in content)
-            
-            # Sum lengths of previous lines
-            offset = sum(len(content[i]) for i in range(line))
-            
-            # Add column position (convert to 0-based)
-            column = max(0, column - 1)
-            offset += min(column, len(content[line]))
-            
-            return offset
-        except Exception as e:
-            print(f"[ERROR] Failed to convert position to offset: {e}")
-            return 0
-
-    def _get_offset(self, location) -> int:
-        """Helper function to convert cursor location to file offset"""
-        if not location.file:
-            return 0
-            
-        try:
-            with open(location.file.name, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
-            
-            # Calculate offset up to the line before our target
-            offset = 0
-            for i in range(location.line - 1):
-                offset += len(lines[i])
-            
-            # Add the column position (0-based)
-            offset += location.column - 1
-            return offset
-        except:
-            return 0
-
-    def _get_code_snippet(self, cursor) -> Optional[str]:
-        """Extract code snippet for the given cursor with line and column precision."""
-        if not cursor.location.file:
-            return None
-            
-        try:
-            with open(cursor.location.file.name, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
-            
-            start_line = cursor.extent.start.line - 1  # Convert to 0-based index
-            start_col = cursor.extent.start.column - 1
-            end_line = cursor.extent.end.line - 1
-            end_col = cursor.extent.end.column
-            
-            # For single-line elements
-            if start_line == end_line:
-                line = lines[start_line]
-                code = line[start_col:end_col]
-            else:
-                # First line
-                code = [lines[start_line][start_col:]]
-                
-                # Intermediate lines (if any)
-                for line_num in range(start_line + 1, end_line):
-                    code.append(lines[line_num])
-                
-                # Last line
-                if end_line < len(lines):
-                    code.append(lines[end_line][:end_col])
-                
-                code = ''.join(code)
-            
-            return self._clean_code(code)
-            
-        except Exception as e:
-            print(f"[ERROR] Failed to read {cursor.location.file}: {e}")
-            return None
 
     def _get_function_signature(self, cursor) -> Dict[str, Any]:
         """Extract detailed function signature information."""
@@ -361,7 +129,7 @@ class CodeExtractor:
             # Try to get default value if exists
             for child in arg.get_children():
                 if child.kind == CursorKind.UNEXPOSED_EXPR:
-                    param["default_value"] = self._get_code_snippet(child)
+                    param["default_value"] = self.range_locator.get_code_snippet(child)
                     break
             
             signature["parameters"].append(param)
@@ -391,6 +159,7 @@ class CodeExtractor:
     def _process_class(self, cursor) -> None:
         """Process a class/struct declaration."""
         class_name = cursor.spelling
+        self.log(f"_process_class:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
         
         element_id = self.element_tracker.generate_element_id(cursor, "class")
         
@@ -402,7 +171,7 @@ class CodeExtractor:
         class_data = {
             "type": "class",
             "name": class_name,
-            "declaration": self._get_code_snippet(cursor),
+            "declaration": self.range_locator.get_code_snippet(cursor),
             "methods": [],
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
@@ -435,6 +204,8 @@ class CodeExtractor:
         if not template_name:  # For anonymous template classes
             template_name = f"anonymous_template_at_{cursor.location.line}"
         
+        self.log(f"_process_class_template:\t{template_name}\tcursor.kind = {cursor.kind}", "note")
+
         element_id = self.element_tracker.generate_element_id(cursor, "class_template")
         
         if self.element_tracker.is_processed(element_id) or template_name in self.data_storage.class_templates:
@@ -443,7 +214,7 @@ class CodeExtractor:
         self.element_tracker.mark_processed(element_id)
         
         # Get full template class definition
-        code = self._get_code_snippet(cursor)
+        code = self.range_locator.get_code_snippet(cursor)
         
         template_data = {
             "type": "class_template",
@@ -461,6 +232,8 @@ class CodeExtractor:
         """Process a free function definition with overload support."""
         if not cursor.is_definition():
             return
+        
+        self.log(f"_process_function:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
 
         element_id = self._generate_overload_id(cursor)
         
@@ -469,7 +242,7 @@ class CodeExtractor:
             
         self.element_tracker.mark_processed(element_id)
         
-        code = self._get_code_snippet(cursor)
+        code = self.range_locator.get_code_snippet(cursor)
         if not code:
             return
 
@@ -496,6 +269,8 @@ class CodeExtractor:
         """Find all overloads of the given function with error handling."""
         if not cursor.location.file:
             return []
+        
+        self.log(f"_find_function_overloads:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
         
         overloads = []
         seen_signatures = set()
@@ -533,7 +308,7 @@ class CodeExtractor:
                 if signature not in seen_signatures:
                     seen_signatures.add(signature)
                     try:
-                        code = self._get_code_snippet(node)
+                        code = self.range_locator.get_code_snippet(node)
                         if code:
                             overloads.append({
                                 "code": code,
@@ -559,6 +334,7 @@ class CodeExtractor:
         if not parent:
             return
         
+        self.log(f"_process_class_member:\t{parent.spelling}::{cursor.spelling}\tparent.kind = {parent.kind}\tcursor.kind = {cursor.kind}", "note")
         is_regular_class = parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL)
         is_template = parent.kind in (
             CursorKind.CLASS_TEMPLATE, 
@@ -580,8 +356,8 @@ class CodeExtractor:
         self.element_tracker.mark_processed(element_id)
         
         # Get both declaration and full body for template methods
-        code = self._get_code_snippet(cursor)
-        full_body = self._get_template_method_body(cursor) if is_template else None
+        code = self.range_locator.get_code_snippet(cursor)
+        full_body = self.template_extractor.get_template_method_body(cursor) if is_template else None
         
         if not code and not full_body:
             return
@@ -627,6 +403,7 @@ class CodeExtractor:
 
     def _find_method_overloads(self, cursor, parent) -> List[Dict]:
         """Find all overloads of the given method in its parent class with error handling."""
+        self.log(f"_find_method_overloads:\t{parent.spelling}::{cursor.spelling}\tparent.kind = {parent.kind}\tcursor.kind = {cursor.kind}", "note")
         overloads = []
         seen_signatures = set()
         
@@ -659,8 +436,8 @@ class CodeExtractor:
                 if signature not in seen_signatures:
                     seen_signatures.add(signature)
                     try:
-                        code = self._get_code_snippet(child)
-                        full_body = self._get_template_method_body(child) if parent.kind in (
+                        code = self.range_locator.get_code_snippet(child)
+                        full_body = self.template_extractor.get_template_method_body(child) if parent.kind in (
                             CursorKind.CLASS_TEMPLATE, 
                             CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION
                         ) else None
@@ -695,20 +472,24 @@ class CodeExtractor:
     
     def _process_template(self, cursor) -> None:
         """Process a function template."""
-        if not (code := self._get_code_snippet(cursor)):
+        if not (code := self.range_locator.get_code_snippet(cursor)):
             return
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "template")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
-        # Get full body for template functions
-        full_body = self._get_template_method_body(cursor)
         
         # Check if this is a method template (inside a class/struct/template)
         parent = cursor.semantic_parent
+        self.log(f"_process_template:\t{parent.spelling}::{cursor.spelling}\tparent.kind = {parent.kind}\tcursor.kind = {cursor.kind}", "note")
+            
+        element_id = self.element_tracker.generate_element_id(cursor, "template")
+        if self.element_tracker.is_processed(element_id):
+            self.log("element_tracker.is_processed!", "note")
+            return
+            
+        self.element_tracker.mark_processed(element_id)
+
+        
+        # Get full body for template functions
+        full_body = self.template_extractor.get_template_method_body(cursor)
+        
         if parent and parent.kind in (
             CursorKind.CLASS_DECL, 
             CursorKind.STRUCT_DECL,
@@ -756,7 +537,7 @@ class CodeExtractor:
 
     def _process_lambda(self, cursor) -> None:
         """Process a lambda expression."""
-        if not (code := self._get_code_snippet(cursor)):
+        if not (code := self.range_locator.get_code_snippet(cursor)):
             return
             
         element_id = self.element_tracker.generate_element_id(cursor, "lambda")
@@ -776,7 +557,7 @@ class CodeExtractor:
 
     def _process_preprocessor_directive(self, cursor) -> None:
         """Process a preprocessor directive (#ifdef, #pragma, etc.)."""
-        if not (code := self._get_code_snippet(cursor)):
+        if not (code := self.range_locator.get_code_snippet(cursor)):
             return
             
         element_id = self.element_tracker.generate_element_id(cursor, "preprocessor")
@@ -797,7 +578,7 @@ class CodeExtractor:
 
     def _process_error_handler(self, cursor) -> None:
         """Process a try-catch block."""
-        if not (code := self._get_code_snippet(cursor)):
+        if not (code := self.range_locator.get_code_snippet(cursor)):
             return
             
         element_id = self.element_tracker.generate_element_id(cursor, "error_handler")
@@ -849,7 +630,7 @@ class CodeExtractor:
         literal_data = {
             "type": "literal",
             "name": cursor.spelling,
-            "code": self._get_code_snippet(cursor),
+            "code": self.range_locator.get_code_snippet(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
@@ -870,7 +651,7 @@ class CodeExtractor:
         attribute_data = {
             "type": "attribute",
             "name": cursor.spelling,
-            "code": self._get_code_snippet(cursor),
+            "code": self.range_locator.get_code_snippet(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
@@ -883,7 +664,7 @@ class CodeExtractor:
         
         if not translation_unit:
             return
-            
+
         def visit_node(cursor):
             """Recursively visit AST nodes and process them."""
             if cursor.kind == CursorKind.TRANSLATION_UNIT:
@@ -955,7 +736,8 @@ def main() -> None:
     PROJ_NAME = r"simple"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
-    
+    log_level = 1
+
     tango_generated_stop_list = [
         "main.cpp",
         "*Class.cpp",
@@ -977,7 +759,7 @@ def main() -> None:
         
     # Initialize data storage with output path
     data_storage = JsonDataStorage(OUTPUT_JSONL)
-    extractor = CodeExtractor(REPO_PATH, should_skip_file, data_storage=data_storage)
+    extractor = CodeExtractor(REPO_PATH, should_skip_file, data_storage=data_storage, log_level = log_level)
 
     file_count = 0
     for root, _, files in os.walk(REPO_PATH):
