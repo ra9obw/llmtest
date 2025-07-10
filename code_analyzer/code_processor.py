@@ -1,18 +1,6 @@
 import os
-import json
-import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable, Set
-from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
-from interfaces import IElementTracker, IFileProcessor
-from element_tracker import ElementTracker
-from file_processor import FileProcessor
-
-
-import os
-import json
-import re
-from pathlib import Path
+import traceback 
 from typing import List, Dict, Any, Optional, Callable, Set
 from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
 from interfaces import IElementTracker, IFileProcessor
@@ -519,67 +507,79 @@ class CodeExtractor:
         
         self.data_storage.add_attribute(attribute_data)
 
+    def _get_cursor_id(self, cursor) -> str:
+        """Generate a unique ID for a cursor based on its location and kind."""
+        if not cursor.location.file:
+            return f"{cursor.kind}:{cursor.spelling}"
+        
+        file_path = self._get_relative_path(cursor.location.file.name)
+        return f"{cursor.kind}:{file_path}:{cursor.location.line}:{cursor.location.column}:{cursor.spelling}"
+
+    def visit_node(self, cursor):
+        """Recursively visit AST nodes and process them."""
+        if cursor.kind == CursorKind.TRANSLATION_UNIT:
+            pass
+        else:
+            # Пропускаем системные заголовки и файлы из skip-листа
+            if (self.file_processor.is_system_header(cursor.location.file.name if cursor.location.file else None) or
+                (self.skip_files_func and self.skip_files_func(self._get_relative_path(cursor.location.file.name)))):
+                return
+            
+            # Проверяем, был ли курсор уже обработан
+            cursor_id = self._get_cursor_id(cursor)
+            if self.element_tracker.is_processed(cursor_id):
+                return
+            
+            # Обрабатываем только релевантные виды курсоров
+            if cursor.kind in self._RELEVANT_CURSOR_KINDS:
+                self.element_tracker.mark_processed(cursor_id)
+                
+                # Классы/структуры
+                if (cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) and cursor.is_definition()):
+                    self._process_class(cursor)
+                # Шаблоны классов
+                elif cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
+                    self._process_class_template(cursor)
+                # Пространства имен
+                elif cursor.kind == CursorKind.NAMESPACE:
+                    self._process_namespace(cursor)
+                # Методы и функции
+                elif cursor.kind == CursorKind.CXX_METHOD:
+                    self._process_class_member(cursor)
+                elif cursor.kind == CursorKind.FUNCTION_DECL:
+                    self._process_function(cursor)
+                # Шаблоны функций
+                elif cursor.kind == CursorKind.FUNCTION_TEMPLATE:
+                    self._process_template(cursor)
+                # Лямбды
+                elif cursor.kind == CursorKind.LAMBDA_EXPR:
+                    self._process_lambda(cursor)
+                # Остальные виды (макросы, директивы и т.д.)
+                elif cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE:
+                    self._process_preprocessor_directive(cursor)
+                elif cursor.kind == CursorKind.CXX_TRY_STMT:
+                    self._process_error_handler(cursor)
+                elif cursor.kind == CursorKind.MACRO_DEFINITION:
+                    self._process_macro(cursor)
+                elif cursor.kind == CursorKind.CONVERSION_FUNCTION:
+                    self._process_literal(cursor)
+                elif cursor.kind == CursorKind.ANNOTATE_ATTR:
+                    self._process_attribute(cursor)
+                else:
+                    self.element_tracker.track_unhandled_kind(cursor)
+            
+        # Рекурсивно обрабатываем дочерние узлы
+        for child in cursor.get_children():
+            self.visit_node(child)
+
     def process_file(self, file_path: Path) -> None:
         """Process a single source file."""
         translation_unit = self.file_processor.parse_file(file_path, self.skip_files_func)
         
         if not translation_unit:
-            return
-
-        def visit_node(cursor):
-            """Recursively visit AST nodes and process them."""
-            if cursor.kind == CursorKind.TRANSLATION_UNIT:
-                pass
-            else:
-                if self.file_processor.is_system_header(cursor.location.file.name if cursor.location.file else None):
-                    return
-                
-                if self.skip_files_func and self.skip_files_func(self._get_relative_path(cursor.location.file.name)):
-                    return
-                
-                # Class/Struct declarations
-                if (cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) and cursor.is_definition()):
-                    self._process_class(cursor)
-                # Class templates
-                elif cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-                    self._process_class_template(cursor)
-                # Namespaces
-                elif cursor.kind == CursorKind.NAMESPACE:
-                    self._process_namespace(cursor)
-                # Methods and functions
-                elif cursor.kind == CursorKind.CXX_METHOD:
-                    self._process_class_member(cursor)
-                elif cursor.kind == CursorKind.FUNCTION_DECL:
-                    self._process_function(cursor)
-                # Templates
-                elif cursor.kind == CursorKind.FUNCTION_TEMPLATE:
-                    self._process_template(cursor)
-                # Lambdas
-                elif cursor.kind == CursorKind.LAMBDA_EXPR:
-                    self._process_lambda(cursor)
-                # Preprocessor directives
-                elif cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE:
-                    self._process_preprocessor_directive(cursor)
-                # Error handlers
-                elif cursor.kind == CursorKind.CXX_TRY_STMT:
-                    self._process_error_handler(cursor)
-                # Macros
-                elif cursor.kind == CursorKind.MACRO_DEFINITION:
-                    self._process_macro(cursor)
-                # User-defined literals
-                elif cursor.kind == CursorKind.CONVERSION_FUNCTION:
-                    self._process_literal(cursor)
-                # Attributes
-                elif cursor.kind == CursorKind.ANNOTATE_ATTR:
-                    self._process_attribute(cursor)
-                else:
-                    self.element_tracker.track_unhandled_kind(cursor)
-                
-            # Process children
-            for child in cursor.get_children():
-                visit_node(child)
+            return      
         
-        visit_node(translation_unit.cursor)
+        self.visit_node(translation_unit.cursor)
 
     def get_results(self) -> List[Dict[str, Any]]:
         """Get all extracted code structures."""
@@ -594,7 +594,8 @@ class CodeExtractor:
 def main() -> None:
     Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
     BASE_ROOT = r"C:\\work\\llm_test"
-    PROJ_NAME = r"overload_example"
+    # PROJ_NAME = r"overload_example"
+    PROJ_NAME = r"simple"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
     log_level = 1
@@ -637,6 +638,8 @@ def main() -> None:
                     file_count += 1
                 except Exception as e:
                     print(f"[ERROR] Failed to process {file_path}: {e}")
+                    traceback.print_exc()
+
     
     # Print statistics and save results
     data_storage.print_statistics(extractor.unprocessed_stats)

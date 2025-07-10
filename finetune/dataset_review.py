@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
-INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
+# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
 
 with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
 
@@ -19,5 +21,5 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
                 print(_desc)
                 # print(_doc)
                 # print(_sgntr)
-                print(f"code: {_code}")
-                print(f"body: {_body}")
+                # print(f"code: {_code}")
+                # print(f"body: {_body}")
