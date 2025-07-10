@@ -32,22 +32,43 @@ class CodeExtractor:
 
         self.log_level = log_level
         # Cursor kinds we're interested in for position tracking
-        self._RELEVANT_CURSOR_KINDS = {
-            CursorKind.CLASS_DECL,
-            CursorKind.STRUCT_DECL,
-            CursorKind.CLASS_TEMPLATE,
-            CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
-            CursorKind.FUNCTION_DECL,
-            CursorKind.CXX_METHOD,
-            CursorKind.FUNCTION_TEMPLATE,
-            CursorKind.NAMESPACE,
-            CursorKind.LAMBDA_EXPR,
-            CursorKind.TEMPLATE_TYPE_PARAMETER
-        }
+        self._cursor_handlers = self._init_cursor_handlers()
+        self._RELEVANT_CURSOR_KINDS = set(self._cursor_handlers.keys())
+
         # Initialize helper classes
         self.range_locator = RangeLocator(self._RELEVANT_CURSOR_KINDS, self.file_processor)
         self.template_extractor = TemplateBodyExtractor(self.range_locator)
-    
+
+    def _init_cursor_handlers(self) -> Dict[CursorKind, Callable[[Any], None]]:
+        """Initialize the dictionary of cursor kind to handler function mappings."""
+        return {
+            # Classes/structs
+            CursorKind.CLASS_DECL: self._process_class,
+            CursorKind.STRUCT_DECL: self._process_class,
+            # Class templates
+            CursorKind.CLASS_TEMPLATE: self._process_class_template,
+            CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION: self._process_class_template,
+            # Namespaces
+            CursorKind.NAMESPACE: self._process_namespace,
+            # Methods and functions
+            CursorKind.CXX_METHOD: self._process_class_member,
+            CursorKind.FUNCTION_DECL: self._process_function,
+            # Function templates
+            CursorKind.FUNCTION_TEMPLATE: self._process_template,
+            # Lambdas
+            CursorKind.LAMBDA_EXPR: self._process_lambda,
+            # Preprocessor
+            CursorKind.PREPROCESSING_DIRECTIVE: self._process_preprocessor_directive,
+            # Error handling
+            CursorKind.CXX_TRY_STMT: self._process_error_handler,
+            # Macros
+            CursorKind.MACRO_DEFINITION: self._process_macro,
+            # Literals
+            CursorKind.CONVERSION_FUNCTION: self._process_literal,
+            # Attributes
+            CursorKind.ANNOTATE_ATTR: self._process_attribute,
+        }
+
     def log(self, _str, severity = 'note'):
         if severity == 'critical':
             print(_str)
@@ -197,7 +218,7 @@ class CodeExtractor:
         self.data_storage.add_class_template(template_data)
 
     def _process_function(self, cursor) -> None:
-        """Process a free function definition with overload support."""
+        """Process a free function definition."""
         if not cursor.is_definition():
             return
         
@@ -221,7 +242,7 @@ class CodeExtractor:
         self.data_storage.add_function(function_info)
 
     def _process_class_member(self, cursor) -> None:
-        """Process a class/struct/template method with overload support."""
+        """Process a class/struct/template method."""
         parent = cursor.semantic_parent
         if not parent:
             return
@@ -457,40 +478,18 @@ class CodeExtractor:
             if cursor.kind in self._RELEVANT_CURSOR_KINDS:
                 self.element_tracker.mark_processed(cursor_id)
                 
-                # Классы/структуры
-                if (cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) and cursor.is_definition()):
-                    self._process_class(cursor)
-                # Шаблоны классов
-                elif cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-                    self._process_class_template(cursor)
-                # Пространства имен
-                elif cursor.kind == CursorKind.NAMESPACE:
-                    self._process_namespace(cursor)
-                # Методы и функции
-                elif cursor.kind == CursorKind.CXX_METHOD:
-                    self._process_class_member(cursor)
-                elif cursor.kind == CursorKind.FUNCTION_DECL:
-                    self._process_function(cursor)
-                # Шаблоны функций
-                elif cursor.kind == CursorKind.FUNCTION_TEMPLATE:
-                    self._process_template(cursor)
-                # Лямбды
-                elif cursor.kind == CursorKind.LAMBDA_EXPR:
-                    self._process_lambda(cursor)
-                # Остальные виды (макросы, директивы и т.д.)
-                elif cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE:
-                    self._process_preprocessor_directive(cursor)
-                elif cursor.kind == CursorKind.CXX_TRY_STMT:
-                    self._process_error_handler(cursor)
-                elif cursor.kind == CursorKind.MACRO_DEFINITION:
-                    self._process_macro(cursor)
-                elif cursor.kind == CursorKind.CONVERSION_FUNCTION:
-                    self._process_literal(cursor)
-                elif cursor.kind == CursorKind.ANNOTATE_ATTR:
-                    self._process_attribute(cursor)
+                # Для классов/структур проверяем, что это определение
+                if cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+                    if cursor.is_definition():
+                        self._cursor_handlers[cursor.kind](cursor)
                 else:
-                    self.element_tracker.track_unhandled_kind(cursor)
-            
+                    # Для остальных типов просто вызываем соответствующий обработчик
+                    handler = self._cursor_handlers.get(cursor.kind)
+                    if handler:
+                        handler(cursor)
+                    else:
+                        self.element_tracker.track_unhandled_kind(cursor)
+        
         # Рекурсивно обрабатываем дочерние узлы
         for child in cursor.get_children():
             self.visit_node(child)
