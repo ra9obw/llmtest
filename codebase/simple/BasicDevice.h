@@ -38,14 +38,15 @@ public:
     }
 };
 
+
 template <typename T>
-class С {
+class C {  // Исправлено на латинскую 'C'
 private:
     T content;  // Поле типа T
 
 public:
     // Конструктор
-    С(const T& newContent) : content(newContent) {}
+    C(const T& newContent) : content(newContent) {}  // Исправлено на латинскую 'C'
 
     // Метод для получения содержимого
     T getContent() const {
@@ -61,6 +62,12 @@ public:
     void show() const {
         std::cout << "Box contains: " << content << std::endl;
     }
+
+    template<class K>
+    void DoX() {
+        std::cout << typeid(K).name() << std::endl;  // Правильное использование typeid
+    }
 };
+
 
 #endif // CLASSES_H

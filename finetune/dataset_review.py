@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 
-INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
+# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
 
 with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
 
@@ -10,7 +11,7 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         print(len(entry), entry['type'])
         if entry['type'] == "class" or entry['type'] == "class_template":
             for method in entry.get("methods", []):
-                _desc = f"{entry['type']} '{entry['name']}' : method {method['name']}"
+                _desc = f"{entry['type']} '{entry['name']}' : {method['type']} {method['name']}"
                 _doc = method.get("docstring", "")
                 _code = method.get("code", "")
                 _sgntr = method.get("signature", "")
@@ -18,5 +19,5 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
                 print(_desc)
                 # print(_doc)
                 # print(_sgntr)
-                # print(f"code: {_code}")
-                # print(f"body: {_body}")
+                print(f"code: {_code}")
+                print(f"body: {_body}")

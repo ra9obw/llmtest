@@ -257,76 +257,7 @@ class CodeExtractor:
             "overload_count": 1
         }
 
-        # Check for overloads
-        overloads = self._find_function_overloads(cursor)
-        if overloads:
-            function_info["is_overloaded"] = True
-            function_info["overload_count"] = len(overloads) + 1
-
         self.data_storage.add_function(function_info)
-
-    def _find_function_overloads(self, cursor) -> List[Dict]:
-        """Find all overloads of the given function with error handling."""
-        if not cursor.location.file:
-            return []
-        
-        self.log(f"_find_function_overloads:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
-        
-        overloads = []
-        seen_signatures = set()
-        
-        # Get all functions in the same file
-        for node in cursor.translation_unit.cursor.walk_preorder():
-            try:
-                if not hasattr(node, 'kind'):
-                    continue
-                
-                if node.kind != CursorKind.FUNCTION_DECL or node.spelling != cursor.spelling:
-                    continue
-                    
-                if not node.location.file or node.location.file.name != cursor.location.file.name:
-                    continue
-                if node == cursor:
-                    continue
-                    
-                if not node.is_definition():
-                    continue
-                    
-                try:
-                    param_types = []
-                    for arg in node.get_arguments():
-                        try:
-                            param_types.append(arg.type.spelling)
-                        except:
-                            param_types.append("unknown")
-                    param_types = tuple(param_types)
-                except:
-                    continue
-                    
-                signature = (node.spelling, param_types)
-                
-                if signature not in seen_signatures:
-                    seen_signatures.add(signature)
-                    try:
-                        code = self.range_locator.get_code_snippet(node)
-                        if code:
-                            overloads.append({
-                                "code": code,
-                                "signature": self._get_function_signature(node),
-                                "location": self._get_relative_path(node.location.file.name),
-                                "line": node.location.line
-                            })
-                    except:
-                        continue
-                        
-            except ValueError as e:
-                if "Unknown template argument kind" in str(e):
-                    continue
-                raise
-            except Exception:
-                continue
-        
-        return overloads
 
     def _process_class_member(self, cursor) -> None:
         """Process a class/struct/template method with overload support."""
@@ -383,84 +314,14 @@ class CodeExtractor:
             if cursor.is_definition():
                 method_info["inline_definition"] = True
             
-            overloads = self._find_method_overloads(cursor, parent)
-            if overloads:
-                method_info["is_overloaded"] = True
-                method_info["overload_count"] = len(overloads) + 1
-            
             if parent_name not in self.data_storage.class_templates:
                 self._process_class_template(parent)
             self.data_storage.class_templates[parent_name]["methods"].append(method_info)
         else:
-            overloads = self._find_method_overloads(cursor, parent)
-            if overloads:
-                method_info["is_overloaded"] = True
-                method_info["overload_count"] = len(overloads) + 1
             
             if parent_name not in self.data_storage.classes:
                 self._process_class(parent)
             self.data_storage.classes[parent_name]["methods"].append(method_info)
-
-    def _find_method_overloads(self, cursor, parent) -> List[Dict]:
-        """Find all overloads of the given method in its parent class with error handling."""
-        self.log(f"_find_method_overloads:\t{parent.spelling}::{cursor.spelling}\tparent.kind = {parent.kind}\tcursor.kind = {cursor.kind}", "note")
-        overloads = []
-        seen_signatures = set()
-        
-        for child in parent.get_children():
-            try:
-                if not hasattr(child, 'kind'):
-                    continue
-                
-                if child.kind != CursorKind.CXX_METHOD or child.spelling != cursor.spelling:
-                    continue
-                if child == cursor:
-                    continue
-                    
-                if (parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) and not child.is_definition()):
-                    continue
-                    
-                try:
-                    param_types = []
-                    for arg in child.get_arguments():
-                        try:
-                            param_types.append(arg.type.spelling)
-                        except:
-                            param_types.append("unknown")
-                    param_types = tuple(param_types)
-                except:
-                    continue
-                    
-                signature = (child.spelling, param_types)
-                
-                if signature not in seen_signatures:
-                    seen_signatures.add(signature)
-                    try:
-                        code = self.range_locator.get_code_snippet(child)
-                        full_body = self.template_extractor.get_template_method_body(child) if parent.kind in (
-                            CursorKind.CLASS_TEMPLATE, 
-                            CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION
-                        ) else None
-                        
-                        if code or full_body:
-                            overloads.append({
-                                "code": code,
-                                "full_body": full_body if full_body else code,
-                                "signature": self._get_function_signature(child),
-                                "location": self._get_relative_path(child.location.file.name),
-                                "line": child.location.line
-                            })
-                    except:
-                        continue
-                        
-            except ValueError as e:
-                if "Unknown template argument kind" in str(e):
-                    continue
-                raise
-            except Exception:
-                continue
-        
-        return overloads
 
     def _get_template_parameters(self, cursor) -> List[str]:
         """Extract template parameters from template declaration."""
@@ -733,7 +594,7 @@ class CodeExtractor:
 def main() -> None:
     Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
     BASE_ROOT = r"C:\\work\\llm_test"
-    PROJ_NAME = r"simple"
+    PROJ_NAME = r"overload_example"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
     log_level = 1
