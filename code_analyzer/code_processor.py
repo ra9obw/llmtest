@@ -148,14 +148,7 @@ class CodeExtractor:
         """Process a class/struct declaration."""
         class_name = cursor.spelling
         self.log(f"_process_class:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
-        
-        element_id = self.element_tracker.generate_element_id(cursor, "class")
-        
-        if self.element_tracker.is_processed(element_id) or class_name in self.data_storage.classes:
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
+
         class_data = {
             "type": "class",
             "name": class_name,
@@ -170,13 +163,7 @@ class CodeExtractor:
     def _process_namespace(self, cursor) -> None:
         """Process a namespace declaration."""
         namespace_name = cursor.spelling or "(anonymous)"
-        element_id = self.element_tracker.generate_element_id(cursor, "namespace")
-        
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
+    
         namespace_data = {
             "type": "namespace",
             "name": namespace_name,
@@ -194,13 +181,6 @@ class CodeExtractor:
         
         self.log(f"_process_class_template:\t{template_name}\tcursor.kind = {cursor.kind}", "note")
 
-        element_id = self.element_tracker.generate_element_id(cursor, "class_template")
-        
-        if self.element_tracker.is_processed(element_id) or template_name in self.data_storage.class_templates:
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
         # Get full template class definition
         code = self.range_locator.get_code_snippet(cursor)
         
@@ -223,13 +203,6 @@ class CodeExtractor:
         
         self.log(f"_process_function:\t{cursor.spelling}\tcursor.kind = {cursor.kind}", "note")
 
-        element_id = self._generate_overload_id(cursor)
-        
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
         code = self.range_locator.get_code_snippet(cursor)
         if not code:
             return
@@ -267,13 +240,7 @@ class CodeExtractor:
             return
         
         parent_name = parent.spelling or f"anon_at_{parent.location.line}"
-        element_id = f"method:{parent_name}::{self._generate_overload_id(cursor)}"
-        
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
+       
         # Get both declaration and full body for template methods
         code = self.range_locator.get_code_snippet(cursor)
         full_body = self.template_extractor.get_template_method_body(cursor) if is_template else None
@@ -327,14 +294,6 @@ class CodeExtractor:
         # Check if this is a method template (inside a class/struct/template)
         parent = cursor.semantic_parent
         self.log(f"_process_template:\t{parent.spelling}::{cursor.spelling}\tparent.kind = {parent.kind}\tcursor.kind = {cursor.kind}", "note")
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "template")
-        if self.element_tracker.is_processed(element_id):
-            self.log("element_tracker.is_processed!", "note")
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-
         
         # Get full body for template functions
         full_body = self.template_extractor.get_template_method_body(cursor)
@@ -389,12 +348,6 @@ class CodeExtractor:
         if not (code := self.range_locator.get_code_snippet(cursor)):
             return
             
-        element_id = self.element_tracker.generate_element_id(cursor, "lambda")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
         lambda_data = {
             "type": "lambda",
             "code": code,
@@ -409,12 +362,6 @@ class CodeExtractor:
         if not (code := self.range_locator.get_code_snippet(cursor)):
             return
             
-        element_id = self.element_tracker.generate_element_id(cursor, "preprocessor")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
         directive_data = {
             "type": "preprocessor",
             "directive": cursor.spelling,
@@ -429,12 +376,6 @@ class CodeExtractor:
         """Process a try-catch block."""
         if not (code := self.range_locator.get_code_snippet(cursor)):
             return
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "error_handler")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
         
         handler_data = {
             "type": "error_handler",
@@ -449,13 +390,7 @@ class CodeExtractor:
         """Process a macro definition."""
         if not cursor.spelling:
             return
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "macro")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
-        
+
         macro_data = {
             "type": "macro",
             "name": cursor.spelling,
@@ -469,12 +404,6 @@ class CodeExtractor:
         """Process a user-defined literal."""
         if not cursor.spelling:
             return
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "literal")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
         
         literal_data = {
             "type": "literal",
@@ -490,12 +419,6 @@ class CodeExtractor:
         """Process a C++ attribute ([[...]])."""
         if not cursor.spelling:
             return
-            
-        element_id = self.element_tracker.generate_element_id(cursor, "attribute")
-        if self.element_tracker.is_processed(element_id):
-            return
-            
-        self.element_tracker.mark_processed(element_id)
         
         attribute_data = {
             "type": "attribute",
@@ -595,6 +518,7 @@ def main() -> None:
     Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
     BASE_ROOT = r"C:\\work\\llm_test"
     # PROJ_NAME = r"overload_example"
+    # PROJ_NAME = r"template_exampl"
     PROJ_NAME = r"simple"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
