@@ -30,11 +30,21 @@ class CodeExtractor:
         self.data_storage = data_storage or JsonDataStorage()
 
         self.log_level = log_level
+        self.log_level_desc = {
+            0: "note",
+            1: "warn",
+            2: "err",
+            3: "crit"
+        }
         self._cursor_handlers = self._init_cursor_handlers()
         self._RELEVANT_CURSOR_KINDS = set(self._cursor_handlers.keys())
 
         self.range_locator = RangeLocator(self._RELEVANT_CURSOR_KINDS, self.file_processor)
         self.template_extractor = TemplateBodyExtractor(self.range_locator)
+
+    def log(self, msg, level=0):
+        if level >= self.log_level:
+            print(f"{self.log_level_desc.get(level, "")}\t{msg}")
 
     def _init_cursor_handlers(self) -> Dict[CursorKind, Callable[[Any], None]]:
         return {
@@ -100,7 +110,10 @@ class CodeExtractor:
 
     def _process_class(self, cursor) -> None:
         if not cursor.is_definition():
+            self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
             return
+
+        self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
 
         class_data = {
             "id": self._generate_id(cursor, "class"),
@@ -116,6 +129,9 @@ class CodeExtractor:
         self.data_storage.add_element("classes", class_data)
 
     def _process_class_template(self, cursor) -> None:
+
+        self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self._get_relative_path(cursor.location.file.name)}")
+
         template_data = {
             "id": self._generate_id(cursor, "class_template"),
             "type": "class_template",
@@ -133,20 +149,38 @@ class CodeExtractor:
         parent = cursor.semantic_parent
         if not parent:
             return
+        parent_type = f"{parent.kind}"
+        
+        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} in {self._get_relative_path(cursor.location.file.name)}")
 
         parent_id = self._get_parent_id(parent)
         if not parent_id:
-            return
+            self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT ID FOUND!", 2)
+            parent_id = "NO PARENT ID"
+        
+        if parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+            code = self.range_locator.get_code_snippet(cursor)
+            is_defined = cursor.is_definition()
+        else:
+            code_definition = self.range_locator.get_code_snippet(cursor)
+            body = self.template_extractor.get_template_method_body(cursor)
+            if body:
+                is_defined = True
+                code = code_definition + "\n" + body
+            else:
+                is_defined = False
+                code = code_definition
 
         method_data = {
             "id": self._generate_id(cursor, "method"),
             "type": "method",
             "name": cursor.spelling,
             "parent_id": parent_id,
-            "parent_type": "class" if parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) else "class_template",
+            "parent_type": parent_type,
+            "parent_name": parent.spelling,
             "signature": self._get_function_signature(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "full_body": self.template_extractor.get_template_method_body(cursor),
+            "code": code,
+            "is_defined": is_defined,
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
@@ -173,7 +207,7 @@ class CodeExtractor:
     def _process_function(self, cursor) -> None:
         if not cursor.is_definition():
             return
-
+        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
         function_data = {
             "id": self._generate_id(cursor, "function"),
             "type": "function",
@@ -187,18 +221,62 @@ class CodeExtractor:
         self.data_storage.add_element("functions", function_data)
 
     def _process_function_template(self, cursor) -> None:
-        template_data = {
-            "id": self._generate_id(cursor, "function_template"),
-            "type": "function_template",
-            "name": cursor.spelling,
-            "signature": self._get_function_signature(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "template_parameters": self._get_template_parameters(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
-        }
         
-        self.data_storage.add_element("function_templates", template_data)
+        parent = cursor.semantic_parent
+        
+        if parent and parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
+            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} of {parent.kind} : {parent.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+            
+            parent_id = self._get_parent_id(parent)
+            if not parent_id:
+                self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT FOUND!", 2)
+                parent_id = "NO PARENT"
+                parent_type = "no_parent"
+            else:
+                parent_type = "class" if parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) else "class_template"
+
+            code_definition = self.range_locator.get_code_snippet(cursor)
+            body = self.template_extractor.get_template_method_body(cursor)
+            if body:
+                is_defined = True
+                code = code_definition + "\n" + body
+            else:
+                is_defined = False
+                code = code_definition
+
+            method_data = {
+                "id": self._generate_id(cursor, "method"),
+                "type": "method",
+                "name": cursor.spelling,
+                "parent_id": parent_id,
+                "parent_type": parent_type,
+                "parent_name": parent.spelling,
+                "signature": self._get_function_signature(cursor),
+                "code": code,
+                "is_defined": is_defined,
+                "location": self._get_relative_path(cursor.location.file.name),
+                "line": cursor.location.line,
+                "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
+            }
+            self.data_storage.add_element("methods", method_data)
+        else:
+
+            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+
+            self.log(f"\t is_definition = {cursor.is_definition()}")
+
+            template_data = {
+                "id": self._generate_id(cursor, "function_template"),
+                "type": "function_template",
+                "name": cursor.spelling,
+                "signature": self._get_function_signature(cursor),
+                "code": self.range_locator.get_code_snippet(cursor),
+                "template_parameters": self._get_template_parameters(cursor),
+                "location": self._get_relative_path(cursor.location.file.name),
+                "line": cursor.location.line
+            }
+            
+            self.data_storage.add_element("function_templates", template_data)
 
     def _process_namespace(self, cursor) -> None:
         namespace_data = {
