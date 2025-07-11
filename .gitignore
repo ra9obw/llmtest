@@ -1,4 +1,5 @@
 *.txt
+-requirements.txt
 *.jsonl
 -dataset_clang_simple.jsonl
 .vscode

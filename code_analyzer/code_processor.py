@@ -121,6 +121,7 @@ class CodeExtractor:
             "type": "class_template",
             "name": cursor.spelling or f"anon_template_{cursor.location.line}",
             "code": self.range_locator.get_code_snippet(cursor),
+            "full_body": self.template_extractor.get_template_method_body(cursor),
             "template_parameters": self._get_template_parameters(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
@@ -145,6 +146,7 @@ class CodeExtractor:
             "parent_type": "class" if parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL) else "class_template",
             "signature": self._get_function_signature(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
+            "full_body": self.template_extractor.get_template_method_body(cursor),
             "location": self._get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)

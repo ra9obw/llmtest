@@ -16,11 +16,11 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
             
         _desc = f"{entry['type']}:{entry["data"]["name"]} with type {entry["data"]["type"]}"
         _doc = entry.get("docstring", "")
-        _code = entry.get("code", "")
+        _code = entry["data"].get("code", "")
         _sgntr = entry.get("signature", "")
-        _body =  entry.get("full_body", "")
+        _body =  entry["data"].get("full_body", "")
         print(_desc)
-            # print(_doc)
-            # print(_sgntr)
-            # print(f"code: {_code}")
-            # print(f"body: {_body}")
+        # print(_doc)
+        # print(_sgntr)
+        print(f"code: {_code}")
+        print(f"body: {_body}")
