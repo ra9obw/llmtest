@@ -57,7 +57,13 @@ class FileProcessor(IFileProcessor):
                file_path.startswith('C:\\Program Files\\Microsoft Visual Studio') or \
                '\\Windows Kits\\' in file_path or \
                file_path.startswith('<')
-
+    
+    def get_relative_path(self, absolute_path: str) -> str:
+        try:
+            return str(Path(absolute_path).resolve().relative_to(self.repo_path))
+        except ValueError:
+            return absolute_path
+    
     @property
     def include_dirs(self) -> List[str]:
         """Get list of include directories."""

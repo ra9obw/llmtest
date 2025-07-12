@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 import traceback 
-import uuid
 from typing import List, Dict, Any, Optional, Callable, Set
+from functools import partial
 from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
 from interfaces import IElementTracker, IFileProcessor
 from element_tracker import ElementTracker
@@ -25,8 +25,8 @@ class CodeExtractor:
         self.index = Index.create()
         self.skip_files_func = skip_files_func
         
-        self.element_tracker = element_tracker or ElementTracker()
         self.file_processor = file_processor or FileProcessor(self.repo_path)
+        self.element_tracker = element_tracker or ElementTracker(partial(self.file_processor.get_relative_path))
         self.data_storage = data_storage or JsonDataStorage()
 
         self.log_level = log_level
@@ -63,37 +63,7 @@ class CodeExtractor:
             CursorKind.CONVERSION_FUNCTION: self._process_literal,
             CursorKind.ANNOTATE_ATTR: self._process_attribute,
         }
-
-    def _generate_id(self, cursor=None, element_type=None) -> str:
-        """Generate unique ID for elements."""
-        if cursor and element_type:
-            file_path = self._get_relative_path(cursor.location.file.name) if cursor.location.file else "unknown"
-            unique_str = f"{file_path}:{cursor.location.line}:{cursor.location.column}:{element_type}:{cursor.spelling}"
-            return f"{element_type[:3]}_{hash(unique_str) & 0xFFFFFFFF}"
-        return f"id_{uuid.uuid4().hex}"
-
-    def _get_parent_id(self, parent_cursor) -> Optional[str]:
-        """Get or create ID for parent element."""
-        if parent_cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
-            return self.data_storage.get_or_create_id("classes", {
-                "name": parent_cursor.spelling,
-                "location": self._get_relative_path(parent_cursor.location.file.name),
-                "line": parent_cursor.location.line
-            })
-        elif parent_cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-            return self.data_storage.get_or_create_id("class_templates", {
-                "name": parent_cursor.spelling,
-                "location": self._get_relative_path(parent_cursor.location.file.name),
-                "line": parent_cursor.location.line
-            })
-        return None
-    
-    def _get_relative_path(self, absolute_path: str) -> str:
-        try:
-            return str(Path(absolute_path).resolve().relative_to(self.repo_path))
-        except ValueError:
-            return absolute_path
-
+        
     def _get_function_signature(self, cursor) -> Dict[str, Any]:
         signature = {
             "name": cursor.spelling,
@@ -126,18 +96,18 @@ class CodeExtractor:
 
     def _process_class(self, cursor) -> None:
         if not cursor.is_definition():
-            self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+            self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             return
 
-        self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         class_data = {
-            "id": self._generate_id(cursor, "class"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "class",
             "name": cursor.spelling,
             "kind": str(cursor.kind),
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "column": cursor.location.column
         }
@@ -146,16 +116,16 @@ class CodeExtractor:
 
     def _process_class_template(self, cursor) -> None:
 
-        self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self._get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         template_data = {
-            "id": self._generate_id(cursor, "class_template"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "class_template",
             "name": cursor.spelling or f"anon_template_{cursor.location.line}",
             "code": self.range_locator.get_code_snippet(cursor),
             "full_body": self.template_extractor.get_template_method_body(cursor),
             "template_parameters": self._get_template_parameters(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -164,12 +134,14 @@ class CodeExtractor:
     def _process_method(self, cursor) -> None:
         parent = cursor.semantic_parent
         if not parent:
+            self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} HAS NO PARENT!", 2)
             return
-        parent_type = f"{parent.kind}"
         
-        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+        parent_type = parent.kind.name
+        
+        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
-        parent_id = self._get_parent_id(parent)
+        parent_id = self.element_tracker.generate_element_id(parent)
         if not parent_id:
             self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT ID FOUND!", 2)
             parent_id = "NO PARENT ID"
@@ -188,7 +160,7 @@ class CodeExtractor:
                 code = code_definition
 
         method_data = {
-            "id": self._generate_id(cursor, "method"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "method",
             "name": cursor.spelling,
             "parent_id": parent_id,
@@ -197,7 +169,7 @@ class CodeExtractor:
             "signature": self._get_function_signature(cursor),
             "code": code,
             "is_defined": is_defined,
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
         }
@@ -207,14 +179,14 @@ class CodeExtractor:
     def _process_function(self, cursor) -> None:
         if not cursor.is_definition():
             return
-        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         function_data = {
-            "id": self._generate_id(cursor, "function"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "function",
             "name": cursor.spelling,
             "signature": self._get_function_signature(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -225,11 +197,11 @@ class CodeExtractor:
         parent = cursor.semantic_parent
         
         if parent and parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} of {parent.kind} : {parent.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+            self.log(f"{cursor.kind.name}:\t_process_function_template {cursor.spelling} of {parent.kind} : {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             
-            parent_id = self._get_parent_id(parent)
+            parent_id = self.element_tracker.generate_element_id(parent)
             if not parent_id:
-                self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT FOUND!", 2)
+                self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT FOUND!", 2)
                 parent_id = "NO PARENT"
                 parent_type = "no_parent"
             else:
@@ -245,7 +217,7 @@ class CodeExtractor:
                 code = code_definition
 
             method_data = {
-                "id": self._generate_id(cursor, "method"),
+                "id": self.element_tracker.generate_element_id(cursor),
                 "type": "method",
                 "name": cursor.spelling,
                 "parent_id": parent_id,
@@ -254,25 +226,25 @@ class CodeExtractor:
                 "signature": self._get_function_signature(cursor),
                 "code": code,
                 "is_defined": is_defined,
-                "location": self._get_relative_path(cursor.location.file.name),
+                "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
                 "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
             }
             self.data_storage.add_element("methods", method_data)
         else:
 
-            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self._get_relative_path(cursor.location.file.name)}")
+            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
             self.log(f"\t is_definition = {cursor.is_definition()}")
 
             template_data = {
-                "id": self._generate_id(cursor, "function_template"),
+                "id": self.element_tracker.generate_element_id(cursor),
                 "type": "function_template",
                 "name": cursor.spelling,
                 "signature": self._get_function_signature(cursor),
                 "code": self.range_locator.get_code_snippet(cursor),
                 "template_parameters": self._get_template_parameters(cursor),
-                "location": self._get_relative_path(cursor.location.file.name),
+                "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line
             }
             
@@ -280,10 +252,10 @@ class CodeExtractor:
 
     def _process_namespace(self, cursor) -> None:
         namespace_data = {
-            "id": self._generate_id(cursor, "namespace"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "namespace",
             "name": cursor.spelling or "(anonymous)",
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -291,10 +263,10 @@ class CodeExtractor:
 
     def _process_lambda(self, cursor) -> None:
         lambda_data = {
-            "id": self._generate_id(cursor, "lambda"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "lambda",
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -302,11 +274,11 @@ class CodeExtractor:
 
     def _process_preprocessor_directive(self, cursor) -> None:
         directive_data = {
-            "id": self._generate_id(cursor, "preprocessor"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "preprocessor",
             "directive": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -314,10 +286,10 @@ class CodeExtractor:
 
     def _process_error_handler(self, cursor) -> None:
         handler_data = {
-            "id": self._generate_id(cursor, "error_handler"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "error_handler",
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -325,10 +297,10 @@ class CodeExtractor:
 
     def _process_macro(self, cursor) -> None:
         macro_data = {
-            "id": self._generate_id(cursor, "macro"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "macro",
             "name": cursor.spelling,
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -336,11 +308,11 @@ class CodeExtractor:
 
     def _process_literal(self, cursor) -> None:
         literal_data = {
-            "id": self._generate_id(cursor, "literal"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "literal",
             "name": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -348,11 +320,11 @@ class CodeExtractor:
 
     def _process_attribute(self, cursor) -> None:
         attribute_data = {
-            "id": self._generate_id(cursor, "attribute"),
+            "id": self.element_tracker.generate_element_id(cursor),
             "type": "attribute",
             "name": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
-            "location": self._get_relative_path(cursor.location.file.name),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line
         }
         
@@ -365,13 +337,6 @@ class CodeExtractor:
                 params.append(child.spelling)
         return params
 
-    def _get_cursor_id(self, cursor) -> str:
-        if not cursor.location.file:
-            return f"{cursor.kind}:{cursor.spelling}"
-        
-        file_path = self._get_relative_path(cursor.location.file.name)
-        return f"{cursor.kind}:{file_path}:{cursor.location.line}:{cursor.location.column}:{cursor.spelling}"
-
     def visit_node(self, cursor):
         if cursor.kind == CursorKind.TRANSLATION_UNIT:
             for child in cursor.get_children():
@@ -381,7 +346,7 @@ class CodeExtractor:
         if self._should_skip_cursor(cursor):
             return
 
-        cursor_id = self._get_cursor_id(cursor)
+        cursor_id = self.element_tracker.generate_element_id(cursor)
         if self.element_tracker.is_processed(cursor_id):
             return
 
@@ -399,7 +364,7 @@ class CodeExtractor:
         if not file_path:
             return True
         return (self.file_processor.is_system_header(file_path) or \
-               (self.skip_files_func and self.skip_files_func(self._get_relative_path(file_path))))
+               (self.skip_files_func and self.skip_files_func(self.file_processor.get_relative_path(file_path))))
 
     def process_file(self, file_path: Path) -> None:
         translation_unit = self.file_processor.parse_file(file_path, self.skip_files_func)

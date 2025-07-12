@@ -1,14 +1,16 @@
-from typing import Set, Dict
+from typing import Dict, Optional, Callable
 from clang.cindex import Cursor, CursorKind
 from pathlib import Path
 from interfaces import IElementTracker
+import hashlib
 
 class ElementTracker(IElementTracker):
     
-    def __init__(self):
+    def __init__(self, get_relative_path: Optional[Callable[[str], str]] = None):
         self._processed_elements = set()
         self.unprocessed_expected: Dict[str, int] = {}
         self.unprocessed_unexpected: Dict[str, int] = {}
+        self.get_relative_path = get_relative_path
         self.expected_unprocessed = (
             CursorKind.DECL_REF_EXPR,
             CursorKind.UNEXPOSED_EXPR,
@@ -25,10 +27,25 @@ class ElementTracker(IElementTracker):
             CursorKind.TEMPLATE_REF
         )
 
-    def generate_element_id(self, cursor: Cursor, element_type: str) -> str:
-        """Generate unique ID for an element to detect duplicates."""
-        location = cursor.location.file.name if cursor.location.file else "unknown"
-        return f"{element_type}:{location}:{cursor.location.line}:{cursor.spelling}"
+    def generate_element_id(self, cursor: Cursor) -> str:
+        """Generates a unique ID for a cursor based on its metadata.
+
+        Format: {type_prefix}_{12_char_hash}
+        The hash is computed from: cursor type, file path, position, and name.
+        """
+        # print(cursor.hash)
+        _name = cursor.spelling or f"anon_{cursor.kind.name}"  # fallback для анонимных элементов
+        if not cursor.location.file:
+            return f"{cursor.kind}:{_name}"  # для элементов без файла (редкий случай)
+                    
+        if self.get_relative_path:
+            _file_path = self.get_relative_path(cursor.location.file.name).replace(":", "_")
+        else:
+            _file_path = cursor.location.file.name.replace(":", "_")
+        _unique_str = f"{cursor.kind.name}:{_file_path}:{cursor.location.line}:{cursor.location.column}:{_name}"
+        _hash_part = hashlib.sha256(_unique_str.encode()).hexdigest()[:12]  # первые 8 символов = 32 бита
+        _id = f"{cursor.kind.name[:5]}_{_hash_part}"  # например: "CLA_a1b2c3d4"
+        return _id
 
     def is_processed(self, element_id: str) -> bool:
         """Check if element was already processed."""

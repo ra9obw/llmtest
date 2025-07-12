@@ -48,7 +48,7 @@ class IElementTracker(ABC):
         pass
     
     @abstractmethod
-    def track_unhandled_kind(self, cursor: Cursor) -> None:
+    def generate_element_id(self, cursor: Cursor) -> str:
         """Зарегистрировать необработанный вид курсора для статистики.
         
         Args:
@@ -115,7 +115,11 @@ class IFileProcessor(ABC):
             True если файл является системным заголовком, иначе False
         """
         pass
-    
+
+    @abstractmethod
+    def get_relative_path(self, absolute_path: str) -> str:
+        pass
+
     @property
     @abstractmethod
     def include_dirs(self) -> List[str]:
