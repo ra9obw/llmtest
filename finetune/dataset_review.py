@@ -19,7 +19,9 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         _code = entry["data"].get("code", "")
         _sgntr = entry.get("signature", "")
         _body =  entry["data"].get("full_body", "")
-        print(f"{_desc} is_defined = {entry.get("is_defined", "")}")
+        _is_defined = entry["data"].get("is_defined", "None")
+
+        print(f"{_desc} is_defined = {_is_defined}")
         # print(_doc)
         # print(_sgntr)
         print(f"code: {_code}")

@@ -94,12 +94,25 @@ class CodeExtractor:
                 return self.range_locator.get_code_snippet(child)
         return None
 
+    def _get_parent_info(self, cursor):
+        parent = cursor.semantic_parent
+        if not parent:
+            return None, None, None
+        
+        parent_id = self.element_tracker.generate_element_id(parent)
+        parent_type = parent.kind.name
+        parent_name = parent.spelling or "(anonymous)"
+        
+        return parent_id, parent_type, parent_name
+
     def _process_class(self, cursor) -> None:
         if not cursor.is_definition():
             self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             return
 
         self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
         class_data = {
             "id": self.element_tracker.generate_element_id(cursor),
@@ -109,14 +122,18 @@ class CodeExtractor:
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
-            "column": cursor.location.column
+            "column": cursor.location.column,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("classes", class_data)
 
     def _process_class_template(self, cursor) -> None:
-
         self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
         template_data = {
             "id": self.element_tracker.generate_element_id(cursor),
@@ -126,7 +143,10 @@ class CodeExtractor:
             "full_body": self.template_extractor.get_template_method_body(cursor),
             "template_parameters": self._get_template_parameters(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("class_templates", template_data)
@@ -165,7 +185,7 @@ class CodeExtractor:
             "parent_name": parent.spelling,
             "signature": self._get_function_signature(cursor),
             "code": code,
-            "is_defined": is_defined,
+            "is_defined": str(is_defined),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
@@ -177,6 +197,9 @@ class CodeExtractor:
         if not cursor.is_definition():
             return
         self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         function_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "function",
@@ -184,13 +207,15 @@ class CodeExtractor:
             "signature": self._get_function_signature(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("functions", function_data)
 
     def _process_function_template(self, cursor) -> None:
-        
         parent = cursor.semantic_parent
         
         if parent and parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
@@ -222,17 +247,17 @@ class CodeExtractor:
                 "parent_name": parent.spelling,
                 "signature": self._get_function_signature(cursor),
                 "code": code,
-                "is_defined": is_defined,
+                "is_defined": str(is_defined),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
                 "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
             }
             self.data_storage.add_element("methods", method_data)
         else:
-
             self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
             self.log(f"\t is_definition = {cursor.is_definition()}")
+
+            parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
             template_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
@@ -242,87 +267,125 @@ class CodeExtractor:
                 "code": self.range_locator.get_code_snippet(cursor),
                 "template_parameters": self._get_template_parameters(cursor),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
-                "line": cursor.location.line
+                "line": cursor.location.line,
+                "parent_id": parent_id,
+                "parent_type": parent_type,
+                "parent_name": parent_name
             }
             
             self.data_storage.add_element("function_templates", template_data)
 
     def _process_namespace(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         namespace_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "namespace",
             "name": cursor.spelling or "(anonymous)",
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("namespaces", namespace_data)
 
     def _process_lambda(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         lambda_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "lambda",
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("lambdas", lambda_data)
 
     def _process_preprocessor_directive(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         directive_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "preprocessor",
             "directive": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("preprocessor_directives", directive_data)
 
     def _process_error_handler(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         handler_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "error_handler",
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("error_handlers", handler_data)
 
     def _process_macro(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         macro_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "macro",
             "name": cursor.spelling,
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("macros", macro_data)
 
     def _process_literal(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         literal_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "literal",
             "name": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("literals", literal_data)
 
     def _process_attribute(self, cursor) -> None:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+
         attribute_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "attribute",
             "name": cursor.spelling,
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name
         }
         
         self.data_storage.add_element("attributes", attribute_data)
