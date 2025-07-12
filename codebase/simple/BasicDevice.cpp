@@ -8,6 +8,6 @@
  * Данный метод выводит сообщение о своем вызове.
  * Предназначен для тестирования или демонстрации функциональности класса A.
  */
-// void A::bar_A() {
-//     std::cout << "Method bar_A called" << std::endl;
-// }
+void A::bar_A() {
+    std::cout << "Method bar_A called" << std::endl;
+}

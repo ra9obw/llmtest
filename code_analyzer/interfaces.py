@@ -12,19 +12,6 @@ class IElementTracker(ABC):
     - Проверки и отметки обработанных элементов
     - Сбора статистики по необработанным элементам
     """
-
-    @abstractmethod
-    def generate_element_id(self, cursor: Cursor, element_type: str) -> str:
-        """Сгенерировать уникальный идентификатор элемента.
-        
-        Args:
-            cursor: Курсор элемента из AST
-            element_type: Тип элемента ('class', 'function' и т.д.)
-            
-        Returns:
-            Уникальный строковый идентификатор элемента
-        """
-        pass
     
     @abstractmethod
     def is_processed(self, element_id: str) -> bool:

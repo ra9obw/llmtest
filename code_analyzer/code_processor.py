@@ -142,9 +142,6 @@ class CodeExtractor:
         self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id = self.element_tracker.generate_element_id(parent)
-        if not parent_id:
-            self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} NO PARENT ID FOUND!", 2)
-            parent_id = "NO PARENT ID"
         
         if parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
             code = self.range_locator.get_code_snippet(cursor)
