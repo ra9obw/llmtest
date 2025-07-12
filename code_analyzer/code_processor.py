@@ -72,6 +72,22 @@ class CodeExtractor:
             return f"{element_type[:3]}_{hash(unique_str) & 0xFFFFFFFF}"
         return f"id_{uuid.uuid4().hex}"
 
+    def _get_parent_id(self, parent_cursor) -> Optional[str]:
+        """Get or create ID for parent element."""
+        if parent_cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+            return self.data_storage.get_or_create_id("classes", {
+                "name": parent_cursor.spelling,
+                "location": self._get_relative_path(parent_cursor.location.file.name),
+                "line": parent_cursor.location.line
+            })
+        elif parent_cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
+            return self.data_storage.get_or_create_id("class_templates", {
+                "name": parent_cursor.spelling,
+                "location": self._get_relative_path(parent_cursor.location.file.name),
+                "line": parent_cursor.location.line
+            })
+        return None
+    
     def _get_relative_path(self, absolute_path: str) -> str:
         try:
             return str(Path(absolute_path).resolve().relative_to(self.repo_path))
@@ -187,22 +203,6 @@ class CodeExtractor:
         }
         
         self.data_storage.add_element("methods", method_data)
-
-    def _get_parent_id(self, parent_cursor) -> Optional[str]:
-        """Get or create ID for parent element."""
-        if parent_cursor.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
-            return self.data_storage.get_or_create_id("classes", {
-                "name": parent_cursor.spelling,
-                "location": self._get_relative_path(parent_cursor.location.file.name),
-                "line": parent_cursor.location.line
-            })
-        elif parent_cursor.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-            return self.data_storage.get_or_create_id("class_templates", {
-                "name": parent_cursor.spelling,
-                "location": self._get_relative_path(parent_cursor.location.file.name),
-                "line": parent_cursor.location.line
-            })
-        return None
 
     def _process_function(self, cursor) -> None:
         if not cursor.is_definition():
@@ -411,8 +411,10 @@ class CodeExtractor:
         return self.element_tracker.unprocessed_stats
 
 def main() -> None:
-    Config.set_library_file(r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll")
-    BASE_ROOT = r"C:\\work\\llm_test"
+    from settings import settings
+    Config.set_library_file(settings["CLANG_PATH"])
+    BASE_ROOT = settings["BASE_ROOT"]
+    # PROJ_NAME = settings["PROJ_NAME"]
     PROJ_NAME = r"simple"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
