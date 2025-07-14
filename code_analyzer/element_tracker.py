@@ -34,17 +34,24 @@ class ElementTracker(IElementTracker):
         The hash is computed from: cursor type, file path, position, and name.
         """
         # print(cursor.hash)
-        _name = cursor.spelling or f"anon_{cursor.kind.name}"  # fallback для анонимных элементов
-        if not cursor.location.file:
-            return f"{cursor.kind}:{_name}"  # для элементов без файла (редкий случай)
-                    
-        if self.get_relative_path:
-            _file_path = self.get_relative_path(cursor.location.file.name).replace(":", "_")
+        if not cursor.kind:
+            print(f"generate_element_id CURSOR HAS NO TYPE!?") # shouldn`t happen
+            _kind = "UNKNOWN"
         else:
-            _file_path = cursor.location.file.name.replace(":", "_")
-        _unique_str = f"{cursor.kind.name}:{_file_path}:{cursor.location.line}:{cursor.location.column}:{_name}"
+            _kind = cursor.kind.name
+
+        _name = cursor.spelling or f"anon_{_kind}"  # fallback for anon elements
+        if not cursor.location.file:
+            _unique_str = f"{_kind}:{_name}"  # elements with no file
+        else:
+            if self.get_relative_path:
+                _file_path = self.get_relative_path(cursor.location.file.name).replace(":", "_")
+            else:
+                _file_path = cursor.location.file.name.replace(":", "_")
+            _unique_str = f"{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}:{_name}"
+        # 
         _hash_part = hashlib.sha256(_unique_str.encode()).hexdigest()[:12]  # первые 8 символов = 32 бита
-        _id = f"{cursor.kind.name[:5]}_{_hash_part}"  # например: "CLA_a1b2c3d4"
+        _id = f"{_kind[:5]}_{_hash_part}"  # например: "CLA_a1b2c3d4"
         return _id
 
     def is_processed(self, element_id: str) -> bool:

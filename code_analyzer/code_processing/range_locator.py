@@ -127,6 +127,33 @@ class RangeLocator:
             }
             
         return None
+    
+    def get_previous_cursor_position(self, cursor: Cursor) -> Optional[Dict]:
+        """Get the position of the previous cursor at the same or higher level before the current one."""
+        siblings = self.get_sibling_and_parent_positions(cursor)
+        if not siblings:
+            return None
+            
+        current_index = next(
+            (i for i, sibling in enumerate(siblings) 
+            if sibling["is_current"]
+            ), -1)
+        
+        if current_index == -1:
+            return None
+            
+        # Ищем предыдущие позиции с уровнем <= текущему
+        for i in range(current_index - 1, -1, -1):
+            if siblings[i]["level"] <= siblings[current_index]["level"]:
+                return {
+                    "file": siblings[i]["file"],
+                    "line": siblings[i]["line"],
+                    "column": siblings[i]["column"],
+                    "level": siblings[i]["level"],
+                    "kind": siblings[i]["kind"]
+                }
+        
+        return None
 
     def get_code_snippet(self, cursor: Cursor) -> Optional[str]:
         """Extract code snippet for the given cursor with line and column precision."""

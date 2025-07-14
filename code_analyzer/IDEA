@@ -1,0 +1,71 @@
+Развитие функциональности:
+1. добавить извлечение док.строк и комментов перед методами
+2. добавить извлечение контекста (по три строки до и после курсора)
+
+Есть следующие моменты:
+**  CursorKind.ANNOTATE_ATTR это некий такой атрибут, он относится к следующему элементу AST и он не имеет дочерних элементов и сам по себе смысла не имеет
+    [[nodiscard]] int foo() { return 42; }
+    наличие такого атрибута может сломать "тупой" поиск комментов перед элементов путём поиска комментов между текущим курсором и предыдущим курсором...
+
+** Хочется добавить извлечение переменных, енумов и прочего такого всякого, если они расположены в "глобальной" области видимости. 
+    --  Типа если родитель не функция, не класс или что-то такое, то излекаем.
+    --  Или родитель определённого типа: namespace или корневой узел? Ещё варианты есть?
+    --  Или сейчас прорабатывают вариант, когда дальнейший обход детей прекращается, если достигнут "оконечный" с моей точки зрения элемент, то есть не класс, не структура и не namespace - то тормозим. 
+
+** Надо доработать CursorKind.CONVERSION_FUNCTION, это функция преобразования объявляется с синтаксисом:
+    operator TargetType() const;
+    Где: TargetType — тип, в который можно преобразовать объект. const (опционально) — указывает, что метод не изменяет объект.
+
+** Однако существует такой курсор, как CursorKind.COMPOUND_STMT, в котором может быть код шаблоных функций, лямбд и прочих функций, можно убрать мой кривой get_template_method_body, и искать через этот курсор.
+   Но там могут быть нюансы если есть атрибуты или аннотации
+
+
+
+
+_process_method
+_process_function_template
+
+void A::bar_A()
+не, фигня!
+
+Для namespace получаем лажу.
+Для каждого файла получаем разный namespace 
+
+
+cpp_analyzer/
+│
+├── code_processor.py          # Главный фасад (CodeExtractor)
+│
+├── file_processor.py          # Обработка файлов (FileProcessor)
+├── element_tracker.py         # Отслеживание элементов (ElementTracker)
+│
+├── ast_parser/
+│   ├── core.py                # Базовый парсер (Config, Index)
+│   ├── cursor_hierarchy.py    # Анализ иерархии курсоров (CursorHierarchyAnalyzer)
+│   ├── position_index.py      # Индекс позиций (FilePositionIndex)
+│   ├── type_system.py         # Система типов (TypeSystem)
+│   │
+│   └── element_processors/    # Процессоры элементов
+│       ├── base.py            # Базовый интерфейс (IElementProcessor)
+│       ├── class_processor.py
+│       ├── function_processor.py
+│       ├── template_processor.py
+│       ├── method_processor.py
+│       ├── namespace_processor.py
+│       └── ...                # Другие процессоры
+│
+├── code_processing/
+│   ├── code_extractor.py      # Извлечение кода (CodeExtractor)
+│   ├── code_cleaner.py        # Очистка кода (CodeCleaner)
+│   ├── range_locator.py       # Работа с позициями (RangeLocator)
+│   └── template_extractor.py  # Извлечение шаблонов (TemplateBodyExtractor)
+│
+├── structure_models/
+│   ├── data_models.py         # Pydantic-модели
+│   ├── storage.py             # Хранилище данных (DataStorage)
+│   └── serialization.py       # Сериализация/десериализация
+│
+└── utils/
+    ├── logger.py              # Логирование
+    ├── config.py              # Конфигурация
+    └── cache.py               # Кеширование индексов

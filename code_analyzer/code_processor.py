@@ -58,10 +58,8 @@ class CodeExtractor:
             CursorKind.FUNCTION_TEMPLATE: self._process_function_template,
             CursorKind.LAMBDA_EXPR: self._process_lambda,
             CursorKind.PREPROCESSING_DIRECTIVE: self._process_preprocessor_directive,
-            CursorKind.CXX_TRY_STMT: self._process_error_handler,
             CursorKind.MACRO_DEFINITION: self._process_macro,
             CursorKind.CONVERSION_FUNCTION: self._process_literal,
-            CursorKind.ANNOTATE_ATTR: self._process_attribute,
         }
         
     def _get_function_signature(self, cursor) -> Dict[str, Any]:
@@ -129,6 +127,7 @@ class CodeExtractor:
         }
         
         self.data_storage.add_element("classes", class_data)
+        return False
 
     def _process_class_template(self, cursor) -> None:
         self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
@@ -150,6 +149,7 @@ class CodeExtractor:
         }
         
         self.data_storage.add_element("class_templates", template_data)
+        return False
 
     def _process_method(self, cursor) -> None:
         parent = cursor.semantic_parent
@@ -192,6 +192,7 @@ class CodeExtractor:
         }
         
         self.data_storage.add_element("methods", method_data)
+        return True
 
     def _process_function(self, cursor) -> None:
         if not cursor.is_definition():
@@ -199,6 +200,7 @@ class CodeExtractor:
         self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        is_defined = cursor.is_definition()
 
         function_data = {
             "id": self.element_tracker.generate_element_id(cursor),
@@ -210,10 +212,12 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "is_defined": str(is_defined)
         }
         
         self.data_storage.add_element("functions", function_data)
+        return True
 
     def _process_function_template(self, cursor) -> None:
         parent = cursor.semantic_parent
@@ -259,44 +263,66 @@ class CodeExtractor:
 
             parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
+            code_definition = self.range_locator.get_code_snippet(cursor)
+            body = self.template_extractor.get_template_method_body(cursor)
+            if body:
+                is_defined = True
+                code = code_definition + "\n" + body
+            else:
+                is_defined = False
+                code = code_definition
+
             template_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
                 "type": "function_template",
                 "name": cursor.spelling,
+                "parent_id": parent_id,
+                "parent_type": parent_type,
+                "parent_name": parent_name,
                 "signature": self._get_function_signature(cursor),
-                "code": self.range_locator.get_code_snippet(cursor),
+                "code": code,
+                "is_defined": str(is_defined),
                 "template_parameters": self._get_template_parameters(cursor),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
-                "parent_id": parent_id,
-                "parent_type": parent_type,
-                "parent_name": parent_name
             }
             
             self.data_storage.add_element("function_templates", template_data)
+        return True
 
     def _process_namespace(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
+        _kind = cursor.kind.name
+        _file_path = self.file_processor.get_relative_path(cursor.location.file.name).replace(":", "_")
+        _name = cursor.spelling or f"namespace_{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}"
+
+        self.log(f"{_kind}:\t_process_namespace {cursor.spelling} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
         namespace_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "namespace",
-            "name": cursor.spelling or "(anonymous)",
+            "name": _name,
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
             "parent_name": parent_name
         }
-        
         self.data_storage.add_element("namespaces", namespace_data)
+        return False
 
     def _process_lambda(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
+        _kind = cursor.kind.name
+        _file_path = self.file_processor.get_relative_path(cursor.location.file.name).replace(":", "_")
+        _name = f"lambda_{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}"
+
         lambda_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "lambda",
+            "name": _name,
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -304,8 +330,8 @@ class CodeExtractor:
             "parent_type": parent_type,
             "parent_name": parent_name
         }
-        
         self.data_storage.add_element("lambdas", lambda_data)
+        return True
 
     def _process_preprocessor_directive(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
@@ -321,24 +347,8 @@ class CodeExtractor:
             "parent_type": parent_type,
             "parent_name": parent_name
         }
-        
         self.data_storage.add_element("preprocessor_directives", directive_data)
-
-    def _process_error_handler(self, cursor) -> None:
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
-        handler_data = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": "error_handler",
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name
-        }
-        
-        self.data_storage.add_element("error_handlers", handler_data)
+        return True
 
     def _process_macro(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
@@ -353,8 +363,8 @@ class CodeExtractor:
             "parent_type": parent_type,
             "parent_name": parent_name
         }
-        
         self.data_storage.add_element("macros", macro_data)
+        return True
 
     def _process_literal(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
@@ -370,25 +380,8 @@ class CodeExtractor:
             "parent_type": parent_type,
             "parent_name": parent_name
         }
-        
         self.data_storage.add_element("literals", literal_data)
-
-    def _process_attribute(self, cursor) -> None:
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
-        attribute_data = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": "attribute",
-            "name": cursor.spelling,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name
-        }
-        
-        self.data_storage.add_element("attributes", attribute_data)
+        return True
 
     def _get_template_parameters(self, cursor) -> List[str]:
         params = []
@@ -407,17 +400,20 @@ class CodeExtractor:
             return
 
         cursor_id = self.element_tracker.generate_element_id(cursor)
-        if self.element_tracker.is_processed(cursor_id):
-            return
+        if not self.element_tracker.is_processed(cursor_id):
+            if cursor.kind in self._RELEVANT_CURSOR_KINDS:
+                self.element_tracker.mark_processed(cursor_id)
+                handler = self._cursor_handlers.get(cursor.kind)
+                if handler:
+                    if handler(cursor): #if there is no interesting nested elements, then return
+                        return
+            else:
+                print(cursor.kind.name, cursor.spelling)
 
-        if cursor.kind in self._RELEVANT_CURSOR_KINDS:
-            self.element_tracker.mark_processed(cursor_id)
-            handler = self._cursor_handlers.get(cursor.kind)
-            if handler:
-                handler(cursor)
-
-        for child in cursor.get_children():
-            self.visit_node(child)
+            for child in cursor.get_children():
+                self.visit_node(child)
+        else:
+            print(f"\tElement is processed:\t{cursor.kind.name}, {cursor.spelling}")
 
     def _should_skip_cursor(self, cursor) -> bool:
         file_path = cursor.location.file.name if cursor.location.file else None
@@ -440,12 +436,35 @@ def main() -> None:
     Config.set_library_file(settings["CLANG_PATH"])
     BASE_ROOT = settings["BASE_ROOT"]
     # PROJ_NAME = settings["PROJ_NAME"]
-    PROJ_NAME = r"simple"
+    # PROJ_NAME = r"simple"
+    PROJ_NAME = r"adc4x250"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
-    
+
+    tango_generated_stop_list = [
+        "main.cpp",
+        "*Class.cpp",
+        "*Class.h",
+        "*DynAttrUtils.cpp",
+        "*StateMachine.cpp",
+        "ClassFactory.cpp",
+    ]
+
+    def should_skip_file(filename):
+        """Check if file should be skipped based on stop list"""
+        for pattern in tango_generated_stop_list:
+            if pattern.startswith('*'):
+                # Pattern matches end of filename
+                if filename.endswith(pattern[1:]):
+                    return True
+            else:
+                # Exact match
+                if filename == pattern:
+                    return True
+        return False
+
     data_storage = JsonDataStorage(OUTPUT_JSONL)
-    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage)
+    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file)
 
     for root, _, files in os.walk(REPO_PATH):
         for file in files:

@@ -15,29 +15,36 @@ namespace A
     // void DoX() {
     //     std::cout << typeid(T).name() << std::endl;  // Правильное использование typeid
     // }
+    void foo_A(int a);
 
-    class A {
-    public:
-        /**
-        * @brief Выполняет метод foo_A класса A.
-        * 
-        * Этот метод выводит сообщение о том, что он был вызван.
-        * Может быть использован для демонстрации работы класса A.
-        */
-        // void foo_A() {
-        //     std::cout << "Method A::bar_A called" << std::endl;
-        // }
+    // void foo_A(int a) {
+    //     std::cout << "Method bar_A(int) called with a = " << a << std::endl;
+    // };
+
+    void bar_A();
+
+    // class A {
+    // public:
+    //     /**
+    //     * @brief Выполняет метод foo_A класса A.
+    //     * 
+    //     * Этот метод выводит сообщение о том, что он был вызван.
+    //     * Может быть использован для демонстрации работы класса A.
+    //     */
+    //     // void foo_A() {
+    //     //     std::cout << "Method A::bar_A called" << std::endl;
+    //     // }
         
-        // void foo_A(int a) {
-        //     std::cout << "Method A::bar_A(int) called with a = " << a << std::endl;
-        // }
-        void bar_A();
+    //     // void foo_A(int a) {
+    //     //     std::cout << "Method A::bar_A(int) called with a = " << a << std::endl;
+    //     // }
+    //     void bar_A();
 
-        // template<class T>
-        // void DoX() {
-        //     std::cout << typeid(T).name() << std::endl;  // Правильное использование typeid
-        // }
-    };
+    //     // template<class T>
+    //     // void DoX() {
+    //     //     std::cout << typeid(T).name() << std::endl;  // Правильное использование typeid
+    //     // }
+    // };
 
     // class B: {
     // public:    

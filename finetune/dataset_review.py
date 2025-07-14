@@ -3,7 +3,8 @@ from pathlib import Path
 
 
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
-INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
+# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_adc4x250.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
 
@@ -24,5 +25,5 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         print(f"{_desc} is_defined = {_is_defined}")
         # print(_doc)
         # print(_sgntr)
-        print(f"code: {_code}")
+        # print(f"code: {_code}")
         # print(f"body: {_body}")
