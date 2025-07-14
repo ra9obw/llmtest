@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 from clang.cindex import Cursor, CursorKind, TranslationUnit
@@ -185,6 +186,41 @@ class RangeLocator:
         except Exception as e:
             print(f"[ERROR] Failed to read {cursor.location.file.name}: {e}")
             return None
+
+    def get_context(self, cursor) -> Dict[str, List[str]]:
+        """Extracts context around the cursor position.
+        
+        Returns:
+            Dict with two keys:
+            - "context_before": list of up to 3 lines before the cursor
+            - "context_after": list of up to 3 lines starting from the cursor line
+        """
+        file_path = cursor.location.file.name
+        if not file_path or not os.path.exists(file_path):
+            return {"context_before": [], "context_after": []}
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except Exception:
+            return {"context_before": [], "context_after": []}
+        
+        line_num = cursor.location.line - 1  # convert to 0-based index
+        if line_num < 0 or line_num >= len(lines):
+            return {"context_before": [], "context_after": []}
+        
+        # Get context before (up to 3 lines)
+        start_before = max(0, line_num - 3)
+        context_before = [line.strip() for line in lines[start_before:line_num]]
+        
+        # Get context after (up to 3 lines including current line)
+        end_after = min(len(lines), line_num + 3)
+        context_after = [line.strip() for line in lines[line_num:end_after]]
+        
+        return {
+            "context_before": context_before,
+            "context_after": context_after
+        }
 
     @staticmethod
     def get_offset_from_position(file_path: str, line: int, column: int) -> int:

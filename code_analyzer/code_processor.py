@@ -111,7 +111,7 @@ class CodeExtractor:
         self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
+        context = self.range_locator.get_context(cursor)
         class_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "class",
@@ -123,7 +123,9 @@ class CodeExtractor:
             "column": cursor.location.column,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         
         self.data_storage.add_element("classes", class_data)
@@ -133,7 +135,7 @@ class CodeExtractor:
         self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
+        context = self.range_locator.get_context(cursor)
         template_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "class_template",
@@ -145,7 +147,9 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         
         self.data_storage.add_element("class_templates", template_data)
@@ -175,7 +179,7 @@ class CodeExtractor:
             else:
                 is_defined = False
                 code = code_definition
-
+        context = self.range_locator.get_context(cursor)
         method_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "method",
@@ -188,7 +192,9 @@ class CodeExtractor:
             "is_defined": str(is_defined),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
-            "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
+            "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         
         self.data_storage.add_element("methods", method_data)
@@ -201,7 +207,7 @@ class CodeExtractor:
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         is_defined = cursor.is_definition()
-
+        context = self.range_locator.get_context(cursor)
         function_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "function",
@@ -213,7 +219,9 @@ class CodeExtractor:
             "parent_id": parent_id,
             "parent_type": parent_type,
             "parent_name": parent_name,
-            "is_defined": str(is_defined)
+            "is_defined": str(is_defined),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         
         self.data_storage.add_element("functions", function_data)
@@ -241,7 +249,7 @@ class CodeExtractor:
             else:
                 is_defined = False
                 code = code_definition
-
+            context = self.range_locator.get_context(cursor)
             method_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
                 "type": "method",
@@ -254,7 +262,9 @@ class CodeExtractor:
                 "is_defined": str(is_defined),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
-                "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
+                "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION),
+                "context_before": context["context_before"],
+                "context_after": context["context_after"]
             }
             self.data_storage.add_element("methods", method_data)
         else:
@@ -271,7 +281,7 @@ class CodeExtractor:
             else:
                 is_defined = False
                 code = code_definition
-
+            context = self.range_locator.get_context(cursor)
             template_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
                 "type": "function_template",
@@ -285,6 +295,8 @@ class CodeExtractor:
                 "template_parameters": self._get_template_parameters(cursor),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
+                "context_before": context["context_before"],
+                "context_after": context["context_after"]
             }
             
             self.data_storage.add_element("function_templates", template_data)
@@ -298,7 +310,7 @@ class CodeExtractor:
         _name = cursor.spelling or f"namespace_{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}"
 
         self.log(f"{_kind}:\t_process_namespace {cursor.spelling} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
+        context = self.range_locator.get_context(cursor)
         namespace_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "namespace",
@@ -307,7 +319,9 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         self.data_storage.add_element("namespaces", namespace_data)
         return False
@@ -318,7 +332,7 @@ class CodeExtractor:
         _kind = cursor.kind.name
         _file_path = self.file_processor.get_relative_path(cursor.location.file.name).replace(":", "_")
         _name = f"lambda_{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}"
-
+        context = self.range_locator.get_context(cursor)
         lambda_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "lambda",
@@ -328,14 +342,16 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         self.data_storage.add_element("lambdas", lambda_data)
         return True
 
     def _process_preprocessor_directive(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
+        context = self.range_locator.get_context(cursor)
         directive_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "preprocessor",
@@ -345,14 +361,16 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         self.data_storage.add_element("preprocessor_directives", directive_data)
         return True
 
     def _process_macro(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
+        context = self.range_locator.get_context(cursor)
         macro_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "macro",
@@ -361,14 +379,16 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         self.data_storage.add_element("macros", macro_data)
         return True
 
     def _process_literal(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-
+        context = self.range_locator.get_context(cursor)
         literal_data = {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": "literal",
@@ -378,7 +398,9 @@ class CodeExtractor:
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
-            "parent_name": parent_name
+            "parent_name": parent_name,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"]
         }
         self.data_storage.add_element("literals", literal_data)
         return True
