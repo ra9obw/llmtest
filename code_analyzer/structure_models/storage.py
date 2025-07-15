@@ -24,7 +24,11 @@ class JsonDataStorage(IJsonDataStorage):
             "error_handlers": [],
             "lambdas": [],
             "literals": [],
-            "preprocessor_directives": []
+            "preprocessor_directives": [],
+            "type_aliases": [],
+            "typedefs": [],
+            "variables": [],
+            "enums": [],
         }
         # Data storage containers
 

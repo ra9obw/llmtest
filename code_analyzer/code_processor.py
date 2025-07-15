@@ -3,7 +3,7 @@ from pathlib import Path
 import traceback 
 from typing import List, Dict, Any, Optional, Callable, Set
 from functools import partial
-from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind
+from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind, StorageClass
 from interfaces import IElementTracker, IFileProcessor, IJsonDataStorage
 from element_tracker import ElementTracker
 from file_processor import FileProcessor
@@ -60,6 +60,13 @@ class CodeExtractor:
             CursorKind.PREPROCESSING_DIRECTIVE: self._process_preprocessor_directive,
             CursorKind.MACRO_DEFINITION: self._process_macro,
             CursorKind.CONVERSION_FUNCTION: self._process_literal,
+
+            CursorKind.TYPE_ALIAS_DECL: self._process_type_alias,
+            CursorKind.TYPEDEF_DECL: self._process_typedef,
+            CursorKind.VAR_DECL: self._process_variable,
+            CursorKind.FIELD_DECL: self._process_field,
+            CursorKind.ENUM_DECL: self._process_enum,
+            CursorKind.ENUM_CONSTANT_DECL: self._process_enum_constant,
         }
 
     def _get_comments_before_cursor(self, cursor) -> Dict[str, Any]:
@@ -143,14 +150,159 @@ class CodeExtractor:
         
         return parent_id, parent_type, parent_name
 
+    def _process_type_alias(self, cursor) -> None:
+        """Обрабатывает объявления типа через using (type aliases)"""
+        if self._is_inside_class_or_function(cursor):
+            return True
+            
+        self.log(f"{cursor.kind}:\t_process_type_alias {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+        
+        type_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": "type_alias",
+            "name": cursor.spelling,
+            # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("type_aliases", type_data)
+        return True
+
+    def _process_typedef(self, cursor) -> None:
+        """Обрабатывает typedef объявления"""
+        if self._is_inside_class_or_function(cursor):
+            return True
+            
+        self.log(f"{cursor.kind}:\t_process_typedef {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+        
+        typedef_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": "typedef",
+            "name": cursor.spelling,
+            # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("typedefs", typedef_data)
+        return True
+
+    def _process_variable(self, cursor) -> None:
+        """Обрабатывает объявления переменных (глобальных и в пространствах имен)"""
+        if self._is_inside_class_or_function(cursor):
+            return True
+            
+        self.log(f"{cursor.kind}:\t_process_variable {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+        
+        var_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": "variable",
+            "name": cursor.spelling,
+            "var_type": cursor.type.spelling,
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "is_const": cursor.type.is_const_qualified(),
+            "is_static": cursor.storage_class == StorageClass.STATIC,
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("variables", var_data)
+        return True
+
+    def _process_field(self, cursor) -> None:
+        """Обрабатывает поля классов/структур (уже обрабатываются в _process_class)"""
+        return True
+
+    def _process_enum(self, cursor) -> None:
+        """Обрабатывает объявления enum"""
+        if self._is_inside_class_or_function(cursor):
+            return True
+            
+        self.log(f"{cursor.kind}:\t_process_enum {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+        
+        enum_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": "enum",
+            "name": cursor.spelling or f"anonymous_enum_{cursor.location.line}",
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "is_scoped": cursor.is_scoped_enum(),
+            "underlying_type": cursor.enum_type.spelling if cursor.enum_type else "int",
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("enums", enum_data)
+        return True
+
+    def _process_enum_constant(self, cursor) -> None:
+        """Обрабатывает константы enum (уже обрабатываются в _process_enum)"""
+        return False
+
+    def _is_inside_class_or_function(self, cursor) -> bool:
+        """Проверяет, находится ли курсор внутри класса/структуры или функции"""
+        parent = cursor.semantic_parent
+        while parent:
+            if parent.kind in (CursorKind.CLASS_DECL,       CursorKind.STRUCT_DECL, 
+                               CursorKind.CLASS_TEMPLATE,   CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+                               CursorKind.FUNCTION_DECL,    CursorKind.FUNCTION_TEMPLATE, 
+                               CursorKind.CXX_METHOD,       CursorKind.LAMBDA_EXPR):
+                return True
+            parent = parent.semantic_parent
+        return False
+
     def _process_class(self, cursor) -> None:
         if not cursor.is_definition():
             self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             return
 
         self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         context = self.range_locator.get_context(cursor)
