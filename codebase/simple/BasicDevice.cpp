@@ -10,11 +10,15 @@
  */
 namespace A
 {
-    void foo_A(int a) {
-        std::cout << "Method bar_A(int) called with a = " << a << std::endl;
-    }
+    // void foo_A(int a) {
+    //     std::cout << "Method bar_A(int) called with a = " << a << std::endl;
+    // }
 
-    void bar_A() {
+    // void bar_A() {
+    //     std::cout << "Method B::bar_A called" << std::endl;
+    // }
+
+    void A::bar_A() {
         std::cout << "Method B::bar_A called" << std::endl;
     }
 }

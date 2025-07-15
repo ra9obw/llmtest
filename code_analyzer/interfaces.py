@@ -1,106 +1,50 @@
 from abc import ABC, abstractmethod
-from typing import Set, Dict, List, Optional, Callable
+from typing import Set, Dict, List, Optional, Callable, Any
 from pathlib import Path
 from clang.cindex import Cursor, CursorKind, TranslationUnit
 
 
 class IElementTracker(ABC):
-    """Абстрактный интерфейс для отслеживания состояния обработки элементов кода.
-    
-    Предоставляет методы для:
-    - Генерации уникальных идентификаторов элементов
-    - Проверки и отметки обработанных элементов
-    - Сбора статистики по необработанным элементам
-    """
     
     @abstractmethod
     def is_processed(self, element_id: str) -> bool:
-        """Проверить, был ли элемент обработан ранее.
-        
-        Args:
-            element_id: Идентификатор элемента
-            
-        Returns:
-            True если элемент уже был обработан, иначе False
-        """
         pass
     
     @abstractmethod
     def mark_processed(self, element_id: str) -> None:
-        """Пометить элемент как обработанный.
-        
-        Args:
-            element_id: Идентификатор элемента
-        """
         pass
     
     @abstractmethod
-    def generate_element_id(self, cursor: Cursor) -> str:
-        """Зарегистрировать необработанный вид курсора для статистики.
-        
-        Args:
-            cursor: Курсор, который не был обработан
-        """
+    def generate_anonimous_name(self, cursor: Cursor) -> str:
         pass
-    
+
+    @abstractmethod
+    def generate_element_id(self, cursor: Cursor) -> str:
+        pass
+
+    @abstractmethod
+    def track_unhandled_kind(self, cursor: Cursor) -> None:
+        pass
+
     @property
     @abstractmethod
     def unprocessed_stats(self) -> Dict[str, Dict[str, int]]:
-        """Статистика по необработанным курсорам.
-        
-        Returns:
-            Словарь с двумя подразделами:
-            - 'expected': {kind_name: count} - ожидаемые необработанные виды
-            - 'unexpected': {kind_name: count} - неожиданные необработанные виды
-        """
         pass
 
 
 class IFileProcessor(ABC):
-    """Абстрактный интерфейс для работы с файловой системой и парсинга исходников.
-    
-    Предоставляет методы для:
-    - Поиска исходных файлов в проекте
-    - Парсинга файлов через libclang
-    - Работы с include-директориями
-    """
 
     @abstractmethod
     def find_source_files(self, extensions: Set[str]) -> List[Path]:
-        """Найти все исходные файлы проекта с указанными расширениями.
-        
-        Args:
-            extensions: Множество расширений файлов (например, {'.cpp', '.hpp'})
-            
-        Returns:
-            Список абсолютных путей к файлам
-        """
         pass
     
     @abstractmethod
     def parse_file(self, file_path: Path, 
                   skip_if: Optional[Callable[[str], bool]] = None) -> Optional[TranslationUnit]:
-        """Распарсить исходный файл и получить AST.
-        
-        Args:
-            file_path: Путь к файлу для парсинга
-            skip_if: Опциональная функция-предикат для пропуска файлов
-            
-        Returns:
-            TranslationUnit libclang или None если файл пропущен/не удалось распарсить
-        """
         pass
     
     @abstractmethod
     def is_system_header(self, file_path: Optional[str]) -> bool:
-        """Проверить, является ли файл системным заголовком.
-        
-        Args:
-            file_path: Путь к файлу или None
-            
-        Returns:
-            True если файл является системным заголовком, иначе False
-        """
         pass
 
     @abstractmethod
@@ -110,9 +54,76 @@ class IFileProcessor(ABC):
     @property
     @abstractmethod
     def include_dirs(self) -> List[str]:
-        """Список include-директорий проекта.
-        
-        Returns:
-            Список абсолютных путей к директориям с заголовками
-        """
+        pass
+
+class ICodeCleaner(ABC):
+    @staticmethod
+    @abstractmethod
+    def clean_code(code: str) -> Optional[str]:
+        pass
+
+
+class IRangeLocator(ABC):
+    @abstractmethod
+    def get_sibling_and_parent_positions(self, cursor: Cursor) -> List[Dict]:
+        pass
+
+    @abstractmethod
+    def get_next_cursor_position(self, cursor: Cursor) -> Optional[Dict]:
+        pass
+
+    @abstractmethod
+    def get_previous_cursor_position(self, cursor: Cursor) -> Optional[Dict]:
+        pass
+
+    @abstractmethod
+    def get_code_snippet(self, cursor: Cursor) -> Optional[str]:
+        pass
+
+    @abstractmethod
+    def get_context(self, cursor) -> Dict[str, List[str]]:
+        pass
+
+    @abstractmethod
+    def get_comments_in_range(self, file_path, start_line, end_line):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_offset_from_position(file_path: str, line: int, column: int) -> int:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_offset(location) -> int:
+        pass
+
+
+class IJsonDataStorage(ABC):
+    @abstractmethod
+    def add_element(self, element_type: str, element_data: Dict[str, Any]) -> None:
+        pass
+
+    @abstractmethod
+    def get_or_create_id(self, element_type: str, match_fields: Dict[str, Any]) -> str:
+        pass
+
+    @abstractmethod
+    def find_element(self, element_type: str, match_fields: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def get_by_id(self, element_id: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def flush(self) -> None:
+        pass
+
+    @abstractmethod
+    def save_to_file(self) -> None:
+        pass
+
+    @abstractmethod
+    def print_statistics(self, unprocessed_stats: Optional[Dict[str, Dict[str, int]]] = None) -> None:
         pass

@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from interfaces import IJsonDataStorage
 import uuid
 
-class JsonDataStorage:
+class JsonDataStorage(IJsonDataStorage):
     """Implementation of data storage that saves to JSON Lines file and tracks statistics."""
     
     def __init__(self, output_path: Optional[str] = None):
@@ -11,6 +12,7 @@ class JsonDataStorage:
         self._index = {}  # Для быстрого поиска элементов
         self.data = {
             "classes": [],
+            "structures": [],
             "class_templates": [],
             "functions": [],
             "function_templates": [], 

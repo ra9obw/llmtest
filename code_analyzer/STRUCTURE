@@ -1,0 +1,11 @@
+code_analyzer
+code_analyzer\code_processing
+code_analyzer\code_processing\code_cleaner.py
+code_analyzer\code_processing\range_locator.py
+code_analyzer\code_processing\template_extractor.py
+code_analyzer\structure_models
+code_analyzer\structure_models\storage.py
+code_analyzer\code_processor.py
+code_analyzer\file_processor.py
+code_analyzer\interfaces.py
+code_analyzer\settings.py

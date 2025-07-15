@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 from clang.cindex import Cursor, CursorKind, TranslationUnit
-from interfaces import IFileProcessor
+from interfaces import IFileProcessor, IRangeLocator
 from code_processing.code_cleaner import CodeCleaner
 
-class RangeLocator:
+class RangeLocator(IRangeLocator):
     """Класс для работы с позициями в коде и определения границ элементов."""
     
     def __init__(self, cursor_of_interst: Set[CursorKind], file_processor: IFileProcessor):
@@ -221,6 +221,57 @@ class RangeLocator:
             "context_before": context_before,
             "context_after": context_after
         }
+    
+    def get_comments_in_range(self, file_path, start_line, end_line):
+        """Extracts all comments in the specified line range."""
+        comments = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except:
+            return comments
+        
+        in_block_comment = False
+        current_comment = None
+        
+        for i, line in enumerate(lines, 1):
+            if i < start_line:
+                continue
+            if i > end_line:
+                break
+                
+            stripped = line.strip()
+            
+            # Handle block comments
+            if '/*' in line and '*/' in line:
+                comments.append({
+                    "type": "block",
+                    "text": line,
+                    "line": i
+                })
+            elif '/*' in line:
+                in_block_comment = True
+                current_comment = {
+                    "type": "block",
+                    "text": line,
+                    "line": i
+                }
+            elif '*/' in line and in_block_comment:
+                in_block_comment = False
+                current_comment["text"] += line
+                comments.append(current_comment)
+                current_comment = None
+            elif in_block_comment:
+                current_comment["text"] += line
+            elif stripped.startswith('//'):
+                comments.append({
+                    "type": "line",
+                    "text": line,
+                    "line": i
+                })
+        
+        return comments
 
     @staticmethod
     def get_offset_from_position(file_path: str, line: int, column: int) -> int:

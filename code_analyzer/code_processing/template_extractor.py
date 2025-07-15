@@ -1,11 +1,11 @@
 from typing import Optional
 from clang.cindex import Cursor
-from .range_locator import RangeLocator
+from interfaces import IRangeLocator
 
 class TemplateBodyExtractor:
     """Класс для извлечения тел шаблонных функций и методов."""
     
-    def __init__(self, range_locator: RangeLocator):
+    def __init__(self, range_locator: IRangeLocator):
         self.range_locator = range_locator
     
     def get_template_method_body(self, cursor: Cursor) -> Optional[str]:

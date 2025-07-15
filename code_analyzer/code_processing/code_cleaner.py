@@ -1,7 +1,8 @@
 import re
 from typing import Optional
+from interfaces import ICodeCleaner
 
-class CodeCleaner:
+class CodeCleaner(ICodeCleaner):
     """Класс для очистки и нормализации кода C++."""
     
     @staticmethod
