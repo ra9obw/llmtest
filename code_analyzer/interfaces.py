@@ -15,7 +15,7 @@ class IElementTracker(ABC):
         pass
     
     @abstractmethod
-    def generate_anonimous_name(self, cursor: Cursor) -> str:
+    def generate_name(self, cursor: Cursor) -> str:
         pass
 
     @abstractmethod

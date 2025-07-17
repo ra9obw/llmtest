@@ -3,10 +3,11 @@ from pathlib import Path
 
 
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
-INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
+# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_adc4x250.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_test_examples.jsonl")
 
 with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
 
@@ -15,7 +16,7 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         # print(len(entry), entry['type'])
         # if entry['type'] == "class" or entry['type'] == "class_template":
             
-        _desc = f"{entry['type']}:{entry["data"]["name"]} with type {entry["data"]["type"]}"
+        _desc = f"{entry['type']}:\t{entry["data"]["name"]} with type {entry["data"]["type"]}"
         _doc = entry.get("docstring", "")
         _code = entry["data"].get("code", "")
         _sgntr = entry.get("signature", "")
@@ -24,10 +25,10 @@ with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         _comment = "".join([el["text"] for el in entry["data"]["comments"]])
         _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
 
-        print(f"{_desc} is_defined = {_is_defined}")
-        print(_comment)
-        print(_docstring)
+        print(f"{_desc}")
+        # print(_comment)
+        # print(_docstring)
         # print(_doc)
         # print(_sgntr)
-        # print(f"code: {_code}")
+        print(f"code: {_code}")
         # print(f"body: {_body}")

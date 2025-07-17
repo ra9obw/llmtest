@@ -59,7 +59,7 @@ class RangeLocator(IRangeLocator):
             return []
             
         file_path = cursor.location.file.name
-        print(f"get_sibling_and_parent_positions {file_path}")
+        # print(f"get_sibling_and_parent_positions {file_path}")
         
         if file_path not in self._file_positions_cache:
             self._build_file_positions_cache(cursor.translation_unit)

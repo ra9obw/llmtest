@@ -24,16 +24,24 @@ class ElementTracker(IElementTracker):
             CursorKind.TEMPLATE_TYPE_PARAMETER,
             CursorKind.DECL_STMT,
             CursorKind.VAR_DECL,
-            CursorKind.TEMPLATE_REF
+            CursorKind.TEMPLATE_REF,
+            CursorKind.CXX_BASE_SPECIFIER,
+            CursorKind.FRIEND_DECL,
+            CursorKind.INTEGER_LITERAL,
+            CursorKind.CXX_BOOL_LITERAL_EXPR
         )
 
-    def generate_anonimous_name(self, cursor: Cursor) -> str:
-        _kind = cursor.kind.name
-        if self.get_relative_path:
-            _file_path = self.get_relative_path(cursor.location.file.name)
+    def generate_name(self, cursor: Cursor) -> str:
+        print(f"{cursor.kind}\t{cursor.spelling}")
+        if cursor.spelling and not cursor.spelling.startswith("(unnamed struct") and not cursor.spelling.startswith("(anonymous union"):
+            _name = cursor.spelling
         else:
-            _file_path = cursor.location.file.name
-        _name = f"{_kind[:5]}-{_file_path}-{cursor.location.line}-{cursor.location.column}"
+            _kind = cursor.kind.name
+            if self.get_relative_path:
+                _file_path = self.get_relative_path(cursor.location.file.name)
+            else:
+                _file_path = cursor.location.file.name
+            _name = f"{_kind[:5]}-{_file_path}-{cursor.location.line}-{cursor.location.column}"
         return _name
 
     def generate_element_id(self, cursor: Cursor) -> str:
@@ -43,8 +51,8 @@ class ElementTracker(IElementTracker):
         The hash is computed from: cursor type, file path, position, and name.
         """
         _kind = cursor.kind.name
+        _name = self.generate_name(cursor)
         if cursor.spelling:
-            _name = cursor.spelling
             if not cursor.location.file:
                 _unique_str = f"{_kind}:{_name}"  # elements with no file
             else:
@@ -52,9 +60,8 @@ class ElementTracker(IElementTracker):
                     _file_path = self.get_relative_path(cursor.location.file.name).replace(":", "_")
                 else:
                     _file_path = cursor.location.file.name.replace(":", "_")
-                _unique_str = f"{_kind}:{_file_path}:{cursor.location.line}:{cursor.location.column}:{_name}"
+                _unique_str = f"{_kind}-{_file_path}-{cursor.location.line}-{cursor.location.column}-{_name}"
         else:
-            _name = self.generate_anonimous_name(cursor)  # fallback for anon elements
             _unique_str = f"{_name}"
 
         _hash_part = hashlib.sha256(_unique_str.encode()).hexdigest()[:12]  # первые 8 символов = 32 бита

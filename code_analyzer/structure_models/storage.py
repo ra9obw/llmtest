@@ -29,6 +29,8 @@ class JsonDataStorage(IJsonDataStorage):
             "typedefs": [],
             "variables": [],
             "enums": [],
+            "unions": [],
+            "using_directives": []
         }
         # Data storage containers
 
@@ -114,10 +116,18 @@ class JsonDataStorage(IJsonDataStorage):
 
         if unprocessed_stats:
             print("\n=== Unprocessed Elements ===")
-            if unprocessed_stats.get("unprocessed_unexpected"):
-                print("\nUnprocessed cursor kinds:")
+            if unprocessed_stats.get("expected"):
+                print("\nUnprocessed expected cursor kinds:")
                 for kind, count in sorted(
-                    unprocessed_stats["unprocessed_unexpected"].items(), 
+                    unprocessed_stats["expected"].items(), 
+                    key=lambda x: x[1], 
+                    reverse=True
+                ):
+                    print(f"{kind}: {count}")
+            if unprocessed_stats.get("unexpected"):
+                print("\nUnprocessed unexpected cursor kinds:")
+                for kind, count in sorted(
+                    unprocessed_stats["unexpected"].items(), 
                     key=lambda x: x[1], 
                     reverse=True
                 ):

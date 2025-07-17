@@ -54,19 +54,22 @@ class CodeExtractor:
             CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION: self._process_class_template,
             CursorKind.NAMESPACE: self._process_namespace,
             CursorKind.CXX_METHOD: self._process_method,
+            CursorKind.CONSTRUCTOR: self._process_method,
+            CursorKind.DESTRUCTOR: self._process_method,
             CursorKind.FUNCTION_DECL: self._process_function,
             CursorKind.FUNCTION_TEMPLATE: self._process_function_template,
             CursorKind.LAMBDA_EXPR: self._process_lambda,
             CursorKind.PREPROCESSING_DIRECTIVE: self._process_preprocessor_directive,
             CursorKind.MACRO_DEFINITION: self._process_macro,
             CursorKind.CONVERSION_FUNCTION: self._process_literal,
-
             CursorKind.TYPE_ALIAS_DECL: self._process_type_alias,
             CursorKind.TYPEDEF_DECL: self._process_typedef,
             CursorKind.VAR_DECL: self._process_variable,
             CursorKind.FIELD_DECL: self._process_field,
             CursorKind.ENUM_DECL: self._process_enum,
             CursorKind.ENUM_CONSTANT_DECL: self._process_enum_constant,
+            CursorKind.UNION_DECL: self._process_union,
+            CursorKind.USING_DIRECTIVE: self._process_using_directive
         }
 
     def _get_comments_before_cursor(self, cursor) -> Dict[str, Any]:
@@ -163,8 +166,8 @@ class CodeExtractor:
         
         type_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "type_alias",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -180,7 +183,89 @@ class CodeExtractor:
         
         self.data_storage.add_element("type_aliases", type_data)
         return True
+    
+    def _process_union(self, cursor) -> None:
+        """Обрабатывает объявления union"""
+        if self._is_inside_class_or_function(cursor):
+            return True
+        if not cursor.is_definition():
+            return True
 
+        self.log(f"{cursor.kind}:\t_process_union {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+
+        union_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "size": cursor.type.get_size(),
+            "fields": self._get_union_fields(cursor),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("unions", union_data)
+        return True
+    
+    def _get_union_fields(self, cursor) -> List[Dict]:
+        """Извлекает информацию о полях union"""
+        fields = []
+        for child in cursor.get_children():
+            if child.kind == CursorKind.FIELD_DECL:
+                fields.append({
+                    "name": child.spelling,
+                    "type": child.type.spelling,
+                    "size": child.type.get_size(),
+                    "line": child.location.line
+                })
+        return fields
+
+    def _process_using_directive(self, cursor) -> None:
+        """Обрабатывает директивы using для пространств имен"""
+        self.log(f"{cursor.kind}:\t_process_using_directive in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        context = self.range_locator.get_context(cursor)
+        comments = self._get_comments_before_cursor(cursor)
+
+        # Получаем имя импортируемого пространства имен
+        namespace = None
+        for child in cursor.get_children():
+            if child.kind == CursorKind.NAMESPACE_REF:
+                namespace = child.spelling
+                break
+
+        using_data = {
+            "id": self.element_tracker.generate_element_id(cursor),
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
+            "namespace": namespace,
+            "location": self.file_processor.get_relative_path(cursor.location.file.name),
+            "line": cursor.location.line,
+            "parent_id": parent_id,
+            "parent_type": parent_type,
+            "parent_name": parent_name,
+            "code": self.range_locator.get_code_snippet(cursor),
+            "context_before": context["context_before"],
+            "context_after": context["context_after"],
+            "comments": comments["comments"],
+            "docstrings": comments["docstrings"]
+        }
+        
+        self.data_storage.add_element("using_directives", using_data)
+        return True
+           
     def _process_typedef(self, cursor) -> None:
         """Обрабатывает typedef объявления"""
         if self._is_inside_class_or_function(cursor):
@@ -194,8 +279,8 @@ class CodeExtractor:
         
         typedef_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "typedef",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -225,8 +310,8 @@ class CodeExtractor:
         
         var_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "variable",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "var_type": cursor.type.spelling,
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -262,8 +347,8 @@ class CodeExtractor:
         
         enum_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "enum",
-            "name": cursor.spelling or f"anonymous_enum_{cursor.location.line}",
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "parent_id": parent_id,
@@ -310,9 +395,8 @@ class CodeExtractor:
 
         class_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "class" if cursor.kind == CursorKind.CLASS_DECL else "struct",
-            "name": cursor.spelling,
-            "kind": str(cursor.kind),
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -338,8 +422,8 @@ class CodeExtractor:
 
         template_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "class_template",
-            "name": cursor.spelling or f"anon_template_{cursor.location.line}",
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "full_body": self.template_extractor.get_template_method_body(cursor),
             "template_parameters": self._get_template_parameters(cursor),
@@ -386,8 +470,8 @@ class CodeExtractor:
 
         method_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "method",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "parent_id": parent_id,
             "parent_type": parent_type,
             "parent_name": parent.spelling,
@@ -418,8 +502,8 @@ class CodeExtractor:
 
         function_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "function",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "signature": self._get_function_signature(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
@@ -464,8 +548,8 @@ class CodeExtractor:
 
             method_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
-                "type": "method",
-                "name": cursor.spelling,
+                "type": cursor.kind.name.lower(),
+                "name": self.element_tracker.generate_name(cursor),
                 "parent_id": parent_id,
                 "parent_type": parent_type,
                 "parent_name": parent.spelling,
@@ -500,8 +584,8 @@ class CodeExtractor:
 
             template_data = {
                 "id": self.element_tracker.generate_element_id(cursor),
-                "type": "function_template",
-                "name": cursor.spelling,
+                "type": cursor.kind.name.lower(),
+                "name": self.element_tracker.generate_name(cursor),
                 "parent_id": parent_id,
                 "parent_type": parent_type,
                 "parent_name": parent_name,
@@ -522,14 +606,14 @@ class CodeExtractor:
 
     def _process_namespace(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        _name = cursor.spelling or self.element_tracker.generate_anonimous_name(cursor)
+        _name = self.element_tracker.generate_name(cursor)
         self.log(f"{cursor.kind.name}:\t_process_namespace {_name} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         context = self.range_locator.get_context(cursor)
         comments = self._get_comments_before_cursor(cursor)
 
         namespace_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "namespace",
+            "type": cursor.kind.name.lower(),
             "name": _name,
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -546,14 +630,14 @@ class CodeExtractor:
 
     def _process_lambda(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        _name = self.element_tracker.generate_anonimous_name(cursor)
+        _name = self.element_tracker.generate_name(cursor)
         self.log(f"{cursor.kind.name}:\t_process_lambda {_name} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         context = self.range_locator.get_context(cursor)
         comments = self._get_comments_before_cursor(cursor)
 
         lambda_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "lambda",
+            "type": cursor.kind.name.lower(),
             "name": _name,
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
@@ -576,8 +660,8 @@ class CodeExtractor:
 
         directive_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "preprocessor_directives",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -599,8 +683,8 @@ class CodeExtractor:
 
         macro_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "macro",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "parent_id": parent_id,
@@ -621,8 +705,8 @@ class CodeExtractor:
 
         literal_data = {
             "id": self.element_tracker.generate_element_id(cursor),
-            "type": "literal",
-            "name": cursor.spelling,
+            "type": cursor.kind.name.lower(),
+            "name": self.element_tracker.generate_name(cursor),
             "code": self.range_locator.get_code_snippet(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
@@ -662,12 +746,13 @@ class CodeExtractor:
                     if handler(cursor): #if there is no interesting nested elements, then return
                         return
             else:
-                print(cursor.kind.name, cursor.spelling)
+                self.element_tracker.track_unhandled_kind(cursor)
+                # print(cursor.kind.name, cursor.spelling)
 
             for child in cursor.get_children():
                 self.visit_node(child)
         else:
-            print(f"\tElement is processed:\t{cursor.kind.name}, {cursor.spelling}")
+            self.log(f"\tElement is processed:\t{cursor.kind.name}, {cursor.spelling}, {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
     def _should_skip_cursor(self, cursor) -> bool:
         file_path = cursor.location.file.name if cursor.location.file else None
@@ -691,7 +776,9 @@ def main() -> None:
     BASE_ROOT = settings["BASE_ROOT"]
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
-    PROJ_NAME = r"adc4x250"
+    # PROJ_NAME = r"adc4x250"
+    # PROJ_NAME = r"cppTango-9.3.7"
+    PROJ_NAME = r"test_examples"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 
@@ -718,7 +805,7 @@ def main() -> None:
         return False
 
     data_storage = JsonDataStorage(OUTPUT_JSONL)
-    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file)
+    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=1)
 
     for root, _, files in os.walk(REPO_PATH):
         for file in files:
@@ -730,7 +817,7 @@ def main() -> None:
                 except Exception as e:
                     print(f"Error processing {file_path}: {e}")
                     traceback.print_exc()
-
+    data_storage.print_statistics(unprocessed_stats = extractor.unprocessed_stats )
     data_storage.save_to_file()
     print(f"Results saved to {OUTPUT_JSONL}")
 
