@@ -777,32 +777,43 @@ def main() -> None:
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
-    # PROJ_NAME = r"cppTango-9.3.7"
-    PROJ_NAME = r"test_examples"
+    PROJ_NAME = r"cppTango-9.3.7"
+    # PROJ_NAME = r"test_examples"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 
-    tango_generated_stop_list = [
-        "main.cpp",
-        "*Class.cpp",
-        "*Class.h",
-        "*DynAttrUtils.cpp",
-        "*StateMachine.cpp",
-        "ClassFactory.cpp",
-    ]
+    # tango_generated_stop_list = [
+    #     "main.cpp",
+    #     "*Class.cpp",
+    #     "*Class.h",
+    #     "*DynAttrUtils.cpp",
+    #     "*StateMachine.cpp",
+    #     "ClassFactory.cpp",
+    # ]
 
+    # def should_skip_file(filename):
+    #     """Check if file should be skipped based on stop list"""
+    #     for pattern in tango_generated_stop_list:
+    #         if pattern.startswith('*'):
+    #             # Pattern matches end of filename
+    #             if filename.endswith(pattern[1:]):
+    #                 return True
+    #         else:
+    #             # Exact match
+    #             if filename == pattern:
+    #                 return True
+    #     return False
+
+
+    tango_codebase_stop_list = [
+        "cpp_test_suite"
+    ]
     def should_skip_file(filename):
-        """Check if file should be skipped based on stop list"""
-        for pattern in tango_generated_stop_list:
-            if pattern.startswith('*'):
-                # Pattern matches end of filename
-                if filename.endswith(pattern[1:]):
-                    return True
-            else:
-                # Exact match
-                if filename == pattern:
+        for pattern in tango_codebase_stop_list:
+            if pattern in filename:
                     return True
         return False
+
 
     data_storage = JsonDataStorage(OUTPUT_JSONL)
     extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=1)
