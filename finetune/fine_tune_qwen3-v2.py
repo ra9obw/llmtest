@@ -15,16 +15,54 @@ import torch
 # import bitsandbytes as bnb
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Only use GPU 0
-
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # Only use GPU 1
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8"
 for i in range(1):
     torch.cuda.empty_cache()
     gc.collect()
     # Пути
+    # MODEL_NAME = "Qwen/Qwen3-8B"  # или локальный путь
+    # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-8B-8b-tango-{i}"
+
+    # MODEL_NAME = "Qwen/Qwen3-4B"  # или локальный путь
+    # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-4B-8b-tango-{i}"
+    # device_map = "auto"
+
+    # MODEL_NAME = "Qwen/Qwen3-32B"
+    # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-32B-8b-tango-{i}"
+    # bound = 35 
+    # lr_count = 64
+    # device_map = {
+    #     "model.embed_tokens": "cuda:0",
+    #     **{f"model.layers.{i}": "cuda:0" for i in range(0, bound)},
+    #     **{f"model.layers.{i}": "cuda:1" for i in range(bound, lr_count)},
+    #     "model.norm": "cuda:0",
+    #     "lm_head": "cuda:0"
+    # }
+
     MODEL_NAME = "Qwen/Qwen2.5-7B"
     device_map = "cuda:0"
     OUTPUT_DIR = "C:\\work\\llm_test\\models\\model-qwen2-7B-8b-tango-0"
- 
+    # OUTPUT_DIR = "D:\\work\\llm_test312\\fine-tuning\\model"
+
+    # MODEL_NAME = "Qwen/Qwen3-0.6B"
+    # OUTPUT_DIR = "D:\\work\\llm_test312\\fine-tuning\\model-qwen3-0.6B-32b"
+
+    # MODEL_NAME = "Qwen/Qwen3-14B"
+    # bound = 24 
+    # lr_count = 40
+    # device_map = {
+    #     "model.embed_tokens": "cuda:0",
+    #     **{f"model.layers.{i}": "cuda:0" for i in range(0, bound)},
+    #     **{f"model.layers.{i}": "cuda:1" for i in range(bound, lr_count)},
+    #     "model.norm": "cuda:0",
+    #     "lm_head": "cuda:0"
+    # }
+    # OUTPUT_DIR = "C:\\work\\llm_test\\models\\model-qwen3-14B-8b-tango-0"
+
+    # DATASET_PATH = "D:\\work\\llm_test312\\fine-tuning\\dataset.json"
     DATASET_PATH = "C:\\work\\llm_test\\dataset_lora.jsonl"
+
 
     # Загрузка токенизатора
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
@@ -87,6 +125,24 @@ for i in range(1):
 
     tokenized_dataset = split_dataset.map(tokenize_function, batched=True)
 
+    # Настройки тренировки
+    # training_args = TrainingArguments(
+    #     output_dir=OUTPUT_DIR,
+    #     per_device_train_batch_size=1,
+    #     per_device_eval_batch_size=1,  # Добавляем batch size для оценки
+    #     num_train_epochs=3,
+    #     logging_dir="./logs",
+    #     logging_steps=100,
+    #     save_steps=500,
+    #     save_total_limit=2,  # Сохраняем только последние 2 чекпоинта
+    #     learning_rate=2e-5,
+    #     gradient_accumulation_steps=8,
+    #     report_to="tensorboard",
+    #     fp16=True,
+    #     eval_strategy="steps",  # Добавляем оценку
+    #     eval_steps=1000,  # Оцениваем каждые 500 шагов
+    # )
+
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         per_device_train_batch_size=1,
@@ -103,6 +159,7 @@ for i in range(1):
         eval_strategy="no",  # Добавляем оценку
         # eval_steps=1000,  # Оцениваем каждые 500 шагов
     )
+
 
     # Коллекция данных
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)

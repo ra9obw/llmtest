@@ -777,8 +777,10 @@ def main() -> None:
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
-    PROJ_NAME = r"cppTango-9.3.7"
+    # PROJ_NAME = r"cppTango-9.3.7"
     # PROJ_NAME = r"test_examples"
+    # PROJ_NAME = r"template_test_simple"
+    PROJ_NAME = r"ifdef_example"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 
@@ -820,7 +822,7 @@ def main() -> None:
 
     for root, _, files in os.walk(REPO_PATH):
         for file in files:
-            if file.endswith((".cpp", ".h", ".hpp", ".cc", ".cxx")):
+            if file.endswith((".cpp", ".h", ".hpp", ".cc", ".cxx", ".tpp")):
                 file_path = Path(root) / file
                 print(f"Processing: {file_path}")
                 try:

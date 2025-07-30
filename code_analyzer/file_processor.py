@@ -12,14 +12,28 @@ class FileProcessor(IFileProcessor):
         self.index = Index.create()
         self._include_dirs = self._find_include_dirs()
 
+    # def _find_include_dirs(self) -> List[str]:
+    #     """Find all include directories in the repository."""
+    #     include_dirs = [str(self.repo_path)]
+    #     for root, dirs, _ in os.walk(self.repo_path):
+    #         if 'include' in dirs:
+    #             include_dirs.append(str(Path(root) / 'include'))
+    #     return include_dirs
     def _find_include_dirs(self) -> List[str]:
-        """Find all include directories in the repository."""
-        include_dirs = [str(self.repo_path)]
-        for root, dirs, _ in os.walk(self.repo_path):
-            if 'include' in dirs:
-                include_dirs.append(str(Path(root) / 'include'))
-        return include_dirs
-
+        """Find all directories containing header files (*.h, *.hpp, *.hh, etc.)."""
+        header_extensions = {'.h', '.hpp', '.hh', '.hxx', '.h++'}
+        include_dirs: Set[str] = set()
+        include_dirs.add(str(self.repo_path))
+        for root, _, files in os.walk(self.repo_path):
+            has_headers = any(
+                Path(file).suffix.lower() in header_extensions
+                for file in files
+            )
+            if has_headers:
+                include_dirs.add(str(Path(root)))
+        # print("_find_include_dirs:\t", sorted(include_dirs) )
+        return sorted(include_dirs)  # Возвращаем отсортированный список для детерминизма
+    
     def find_source_files(self, extensions: Set[str]) -> List[Path]:
         """Find all source files with given extensions in the repository."""
         source_files = []
@@ -39,12 +53,13 @@ class FileProcessor(IFileProcessor):
             '-std=c++17',
             '-x', 'c++',
             '-fparse-all-comments',
-            '-D__clang__'
+            '-D__clang__',
+            '-fno-delayed-template-parsing'
         ]
         args.extend(arg for include_dir in self.include_dirs 
                    for arg in ['-I', include_dir])
         
-        return self.index.parse(str(file_path), args=args)
+        return self.index.parse(str(file_path), args=args, options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
 
     def is_system_header(self, file_path: Optional[str]) -> bool:
         """Check if the file is a system header."""

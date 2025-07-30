@@ -5,6 +5,40 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 
+def plot_single_histograms(stat):
+    """Функция для построения гистограмм длин кода по типам элементов"""
+    for elem_type, data in stat.items():
+        # Пропускаем служебные поля
+        lengths = [v["length"] for k, v in data.items() 
+                  if k not in ["max_desc", "min_desc", "max_len", "min_len"]]
+        
+        if not lengths:
+            continue
+            
+        plt.figure(figsize=(12, 7))
+        n_bins = 50
+        _, bins, _ = plt.hist(lengths, bins=n_bins, alpha=0.7, color='blue', log=True)
+        
+        # Вычисляем размер бина (берем первый интервал как пример)
+        bin_size = bins[1] - bins[0]
+        
+        plt.title(f'Code length distribution for {elem_type}\n'
+                 f'Total elements: {len(lengths)}, Bin size: {bin_size:.1f} chars')
+        plt.xlabel('Code length (characters)')
+        plt.ylabel('Frequency (log scale)')
+        plt.grid(True, which="both", ls="--", alpha=0.5)
+        
+        # Добавляем вертикальные линии с полным описанием
+        plt.axvline(x=data["min_len"], color='red', linestyle='--', 
+                   label=f'Min: {data["min_len"]} chars\n{data["min_desc"]}')
+        plt.axvline(x=data["max_len"], color='green', linestyle='--', 
+                   label=f'Max: {data["max_len"]} chars\n{data["max_desc"]}')
+        
+        # Настраиваем легенду с переносом текста
+        legend = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper center', borderaxespad=0.)
+        plt.tight_layout()
+        
+        plt.show()
 
 def plot_histograms(stat):
     """Функция для построения гистограмм длин кода по типам элементов в одном окне"""
@@ -134,7 +168,7 @@ def main():
         print(f"for {k} type\tmin len is\t{v['min_len']}\t{v['min_desc']}\n"
               f"and max len is {v['max_len']}\t{v['max_desc']}\n")
     
-    plot_histograms(stat)
+    # plot_single_histograms(stat)
 
 if __name__ == "__main__":
     main()
