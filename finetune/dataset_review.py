@@ -33,14 +33,15 @@ def clean_cpp_code(code):
     return code
 
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
+# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_simple.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_adc4x250.jsonl")
-# INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_test_examples.jsonl")
-INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test_simple.jsonl")
+
 
 
 def get_function(_type = "classes", _name = "DeviceImpl", _file = INPUT_JSONL):
@@ -49,16 +50,16 @@ def get_function(_type = "classes", _name = "DeviceImpl", _file = INPUT_JSONL):
         for line in in_f:
             entry = json.loads(line)
             # print(len(entry), entry['type'])
-            if entry['type'] == "classes" and entry["data"]["name"] == "DeviceImpl":
+            if entry['type'] == "classes" and entry["name"] == "DeviceImpl":
                 
-                _desc = f"{entry['type']}:\t{entry["data"]["name"]} with type {entry["data"]["type"]}"
+                _desc = f"{entry['type']}:\t{entry["name"]} with type {entry["type"]}"
                 _doc = entry.get("docstring", "")
-                _code = entry["data"].get("code", "")
+                _code = entry.get("code", "")
                 _sgntr = entry.get("signature", "")
-                _body =  entry["data"].get("full_body", "")
-                _is_defined = entry["data"].get("is_defined", "None")
-                _comment = "".join([el["text"] for el in entry["data"]["comments"]])
-                _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
+                _body =  entry.get("full_body", "")
+                _is_defined = entry.get("is_defined", "None")
+                _comment = "".join([el["text"] for el in entry["comments"]])
+                _docstring = "".join([el["text"] for el in entry["docstrings"]])
 
                 print(f"{_desc}")
                 print("comment is\n", _comment)
@@ -76,20 +77,20 @@ def show_elements(_file = INPUT_JSONL):
         for line in in_f:
             entry = json.loads(line)
             # print(len(entry), entry['type'])
-            if entry["data"]['type'] == "function_template":
-            # if True:     
-                _code = entry["data"].get("code", "")
-                _is_defined = entry["data"].get("is_defined", "None")
-                _desc = f"{entry['type']}:\t{entry["data"]["name"]}\twith type {entry["data"]["type"]}\tparent type: {entry["data"]["parent_type"]}\tat {entry["data"]["location"]}:{entry["data"]["line"]}\t\tcode length {len(_code)}\tis_defined: {_is_defined}"
+            # if entry['type'] == "function_template":
+            if True:     
+                _code = entry.get("code", "")
+                _is_defined = entry.get("is_defined", "None")
+                _desc = f"{entry['type']}:\t{entry["name"]}\twith type {entry["type"]}\tparent nema: {entry["parent_name"]}\tparent type: {entry["parent_type"]}\tat {entry["location"]}:{entry["line"]}\t\tcode length {len(_code)}\tis_defined: {_is_defined}"
                 _doc = entry.get("docstring", "")
                 _sgntr = entry.get("signature", "")
-                _body =  entry["data"].get("full_body", "")
-                _comment = "".join([el["text"] for el in entry["data"]["comments"]])
-                _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
+                _body =  entry.get("full_body", "")
+                _comment = "".join([el["text"] for el in entry["comments"]])
+                _docstring = "".join([el["text"] for el in entry["docstrings"]])
 
                 print(f"{_desc}")
-                # print("comment is\n", _comment)
-                # print("docstring is", _docstring)
+                print("comment is\n", _comment)
+                print("docstring is", _docstring)
                 # print(_doc)
                 # print(_sgntr)
                 # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")

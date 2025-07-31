@@ -103,21 +103,9 @@ class IJsonDataStorage(ABC):
     @abstractmethod
     def add_element(self, element_type: str, element_data: Dict[str, Any]) -> None:
         pass
-
+    
     @abstractmethod
-    def get_or_create_id(self, element_type: str, match_fields: Dict[str, Any]) -> str:
-        pass
-
-    @abstractmethod
-    def find_element(self, element_type: str, match_fields: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    def get_by_id(self, element_id: str) -> Optional[Dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    def flush(self) -> None:
+    def create_element_storage(self, fields: Set[str]) -> None:
         pass
 
     @abstractmethod

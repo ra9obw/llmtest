@@ -30,34 +30,88 @@ Now, putting it all together in the doc-string format.\
  */\
 "
 
-think_tag = "</think>"
-if think_tag in response:
-    parts = response.split(think_tag, 1)
-    if len(parts) > 1:
-        print(parts[1].strip())
+# think_tag = "</think>"
+# if think_tag in response:
+#     parts = response.split(think_tag, 1)
+#     if len(parts) > 1:
+#         print(parts[1].strip())
 
-import re
-def extract_docstrings(text):
-    """
-    Извлекает все докстринги из переданного текста.
+# import re
+# def extract_docstrings(text):
+#     """
+#     Извлекает все докстринги из переданного текста.
     
-    Аргументы:
-        text (str): Исходный текст, который может содержать докстринги.
+#     Аргументы:
+#         text (str): Исходный текст, который может содержать докстринги.
         
-    Возвращает:
-        str: Текст, содержащий только докстринги, или пустую строку, если докстрингов нет.
-    """
-    # Регулярное выражение для поиска многострочных докстрингов (Python и C/C++ стиль)
-    pattern = r'(\"\"\"[\s\S]*?\"\"\"|\'\'\'[\s\S]*?\'\'\'|/\*\*[\s\S]*?\*/)'
-    docstrings = re.findall(pattern, text)
-    return '\n'.join(docstrings) if docstrings else ''
+#     Возвращает:
+#         str: Текст, содержащий только докстринги, или пустую строку, если докстрингов нет.
+#     """
+#     # Регулярное выражение для поиска многострочных докстрингов (Python и C/C++ стиль)
+#     pattern = r'(\"\"\"[\s\S]*?\"\"\"|\'\'\'[\s\S]*?\'\'\'|/\*\*[\s\S]*?\*/)'
+#     docstrings = re.findall(pattern, text)
+#     return '\n'.join(docstrings) if docstrings else ''
 
-print(extract_docstrings(response))
+# print(extract_docstrings(response))
+
+
 
 # import os
 # import json
 # from pathlib import Path
-# from clang.cindex import Index, CursorKind, TranslationUnit, Config
+from clang.cindex import Index, CursorKind, TranslationUnit, Config
+
+crsrs = [
+CursorKind.CLASS_DECL,
+CursorKind.STRUCT_DECL,
+CursorKind.CLASS_TEMPLATE,
+CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+CursorKind.NAMESPACE,
+CursorKind.CXX_METHOD,
+CursorKind.CONSTRUCTOR,
+CursorKind.DESTRUCTOR,
+CursorKind.FUNCTION_DECL,
+CursorKind.FUNCTION_TEMPLATE,
+CursorKind.LAMBDA_EXPR,
+CursorKind.PREPROCESSING_DIRECTIVE,
+CursorKind.MACRO_DEFINITION,
+CursorKind.CONVERSION_FUNCTION,
+CursorKind.TYPE_ALIAS_DECL,
+CursorKind.TYPEDEF_DECL,
+CursorKind.VAR_DECL,
+CursorKind.FIELD_DECL,
+CursorKind.ENUM_DECL,
+CursorKind.ENUM_CONSTANT_DECL,
+CursorKind.UNION_DECL,
+CursorKind.USING_DIRECTIVE
+]
+
+for crsr in crsrs:
+    print(crsr.name.lower())
+
+
+# lass_decl
+# struct_decl
+# class_template
+# class_template_partial_specialization
+# namespace
+# cxx_method
+# constructor
+# destructor
+# function_decl
+# function_template
+# lambda_expr
+# preprocessing_directive
+# macro_definition
+# conversion_function
+# type_alias_decl
+# typedef_decl
+# var_decl
+# field_decl
+# enum_decl
+# enum_constant_decl
+# union_decl
+# using_directive
 
 # # Укажи полный путь к libclang.dll
 # LIBCLANG_DLL_PATH = r"E:\\Programs\\clang-llvm-windows-msvc\\bin\\libclang.dll"
