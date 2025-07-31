@@ -332,30 +332,31 @@ INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_cppTango-9.3
 
 
 def get_code_element(_type = "classes", _name = "DeviceImpl", _file = INPUT_JSONL):
-    with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
+    with open(_file, "r", encoding="utf-8") as in_f:
 
         for line in in_f:
             entry = json.loads(line)
             # print(len(entry), entry['type'])
-            if entry["data"]['type'] == _type and entry["data"]["name"] == _name:
+            if entry["data"]['type'] == _type and entry["data"]["name"] == _name and entry["data"]["is_defined"] == "True":
                 
                 _desc = f"{entry['type']}:\t{entry["data"]["name"]} with type {entry["data"]["type"]}"
                 # _doc = entry.get("docstring", "")
-                # _code = entry["data"].get("code", "")
+                _code = entry["data"].get("code", "")
                 # _sgntr = entry.get("signature", "")
                 # _body =  entry["data"].get("full_body", "")
                 # _is_defined = entry["data"].get("is_defined", "None")
-                # _comment = "".join([el["text"] for el in entry["data"]["comments"]])
+                _comment = "".join([el["text"] for el in entry["data"]["comments"]])
                 # _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
 
                 print(f"{_desc}")
-                # print("comment is\n", _comment)
+                print("comment is\n", _comment)
                 # print("docstring is", _docstring)
                 # print(_doc)
                 # print(_sgntr)
                 # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")
-                # print(f"body: {_body}")
+                print(f"body: {_code}")
                 return entry["data"]
+    print("Nothing Found!")
     return ""
 
 if __name__ == "__main__":

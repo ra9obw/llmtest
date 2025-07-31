@@ -7,6 +7,12 @@ public:
     void myMethod(T value) {  // Объявление + определение внутри класса
         std::cout << value << std::endl;
     }
+    template <typename G>
+    void myMethod(G value)
+    {
+        std::cout << value << std::endl;
+    }
+    
 };
 
 // myclass.h
@@ -25,6 +31,16 @@ class ClassC {
 public:
     template <typename T>
     void myMethod(T value);  // Объявление
+};
+
+template <typename T>
+struct MyVector {
+    T* data;
+};
+
+template <>
+struct MyVector<bool> {
+    bool* packed_data;
 };
 
 #endif //_MY_CLASS_H_

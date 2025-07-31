@@ -25,7 +25,7 @@ class RangeLocator(IRangeLocator):
         # if not file_path or file_path in self._file_positions_cache:
             # print("not file_path")
             # return
-        print(f"_build_file_positions_cache {translation_unit.spelling}")
+        # print(f"_build_file_positions_cache {translation_unit.spelling}")
         positions_dict = {}
         
         def collect_positions(node, level=0):
@@ -49,7 +49,7 @@ class RangeLocator(IRangeLocator):
         
         collect_positions(translation_unit.cursor)
         for file_path, positions in positions_dict.items():
-            print(f"builded for: {file_path}, cursors =  {len(positions)} pcs")
+            # print(f"builded for: {file_path}, cursors =  {len(positions)} pcs")
             positions.sort(key=lambda x: (x["line"], x["column"]))
             self._file_positions_cache[file_path] = positions
 

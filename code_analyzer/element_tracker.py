@@ -32,7 +32,7 @@ class ElementTracker(IElementTracker):
         )
 
     def generate_name(self, cursor: Cursor) -> str:
-        print(f"{cursor.kind}\t{cursor.spelling}")
+        # print(f"{cursor.kind}\t{cursor.spelling}")
         if cursor.spelling and not cursor.spelling.startswith("(unnamed struct") and not cursor.spelling.startswith("(anonymous union"):
             _name = cursor.spelling
         else:

@@ -38,7 +38,7 @@ def clean_cpp_code(code):
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_overload_example.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_test_examples.jsonl")
-INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_cppTango-9.3.7.jsonl")
+INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test_simple.jsonl")
 
@@ -76,14 +76,14 @@ def show_elements(_file = INPUT_JSONL):
         for line in in_f:
             entry = json.loads(line)
             # print(len(entry), entry['type'])
-            if "devapi_attr.tpp" in entry["data"]["location"]:
+            if entry["data"]['type'] == "function_template":
             # if True:     
-                _desc = f"{entry['type']}:\t{entry["data"]["name"]} with type {entry["data"]["type"]}\t\tat {entry["data"]["location"]}:{entry["data"]["line"]}"
-                _doc = entry.get("docstring", "")
                 _code = entry["data"].get("code", "")
+                _is_defined = entry["data"].get("is_defined", "None")
+                _desc = f"{entry['type']}:\t{entry["data"]["name"]}\twith type {entry["data"]["type"]}\tparent type: {entry["data"]["parent_type"]}\tat {entry["data"]["location"]}:{entry["data"]["line"]}\t\tcode length {len(_code)}\tis_defined: {_is_defined}"
+                _doc = entry.get("docstring", "")
                 _sgntr = entry.get("signature", "")
                 _body =  entry["data"].get("full_body", "")
-                _is_defined = entry["data"].get("is_defined", "None")
                 _comment = "".join([el["text"] for el in entry["data"]["comments"]])
                 _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
 
@@ -92,7 +92,7 @@ def show_elements(_file = INPUT_JSONL):
                 # print("docstring is", _docstring)
                 # print(_doc)
                 # print(_sgntr)
-                print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")
+                # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")
                 # print(f"body: {_body}")
                 # return _code
     # return ""

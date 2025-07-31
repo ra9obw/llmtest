@@ -387,7 +387,7 @@ class CodeExtractor:
             self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             return
 
-        self.log(f"{cursor.kind}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind.name}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         context = self.range_locator.get_context(cursor)
@@ -414,7 +414,7 @@ class CodeExtractor:
         return False
 
     def _process_class_template(self, cursor) -> None:
-        self.log(f"{cursor.kind}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind.name}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
 
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         context = self.range_locator.get_context(cursor)
@@ -444,12 +444,12 @@ class CodeExtractor:
     def _process_method(self, cursor) -> None:
         parent = cursor.semantic_parent
         if not parent:
-            self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} HAS NO PARENT!", 2)
+            self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} HAS NO PARENT!", 2)
             return
         
         parent_type = parent.kind.name
         
-        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} of {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+        self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} of {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}", 3)
 
         parent_id = self.element_tracker.generate_element_id(parent)
         
@@ -525,7 +525,7 @@ class CodeExtractor:
         parent = cursor.semantic_parent
         
         if parent and parent.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION):
-            self.log(f"{cursor.kind.name}:\t_process_function_template {cursor.spelling} of {parent.kind} : {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
+            self.log(f"{cursor.kind.name}:\t_process_function_template {cursor.spelling} of {parent.kind.name} : {parent.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}", 3)
             
             parent_id = self.element_tracker.generate_element_id(parent)
             if not parent_id:
@@ -558,7 +558,8 @@ class CodeExtractor:
                 "is_defined": str(is_defined),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
-                "is_template": parent.kind in (CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION),
+                "is_template": True,
+                "template_parameters": self._get_template_parameters(cursor),
                 "context_before": context["context_before"],
                 "context_after": context["context_after"],
             "comments": comments["comments"],
@@ -566,8 +567,8 @@ class CodeExtractor:
             }
             self.data_storage.add_element("methods", method_data)
         else:
-            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-            self.log(f"\t is_definition = {cursor.is_definition()}")
+            self.log(f"{cursor.kind}:\t_process_function_template {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}", 3)
+            self.log(f"\t is_definition = {cursor.is_definition()}", 3)
 
             parent_id, parent_type, parent_name = self._get_parent_info(cursor)
 
@@ -592,6 +593,7 @@ class CodeExtractor:
                 "signature": self._get_function_signature(cursor),
                 "code": code,
                 "is_defined": str(is_defined),
+                "is_template": True,
                 "template_parameters": self._get_template_parameters(cursor),
                 "location": self.file_processor.get_relative_path(cursor.location.file.name),
                 "line": cursor.location.line,
@@ -778,9 +780,9 @@ def main() -> None:
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
     # PROJ_NAME = r"cppTango-9.3.7"
-    # PROJ_NAME = r"test_examples"
+    PROJ_NAME = r"template_exampl"
     # PROJ_NAME = r"template_test_simple"
-    PROJ_NAME = r"ifdef_example"
+    # PROJ_NAME = r"ifdef_example"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 
@@ -818,7 +820,7 @@ def main() -> None:
 
 
     data_storage = JsonDataStorage(OUTPUT_JSONL)
-    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=1)
+    extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=3)
 
     for root, _, files in os.walk(REPO_PATH):
         for file in files:
