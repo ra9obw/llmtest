@@ -22,7 +22,7 @@ def plot_single_histograms(stat):
         # Вычисляем размер бина (берем первый интервал как пример)
         bin_size = bins[1] - bins[0]
         
-        plt.title(f'Code length distribution for {elem_type}\n'
+        plt.title(f'{elem_type}\n'
                  f'Total elements: {len(lengths)}, Bin size: {bin_size:.1f} chars')
         plt.xlabel('Code length (characters)')
         plt.ylabel('Frequency (log scale)')
@@ -105,12 +105,13 @@ def clean_cpp_code(code):
     return code
 
 def main():
-    from settings import settings
+    # from settings import settings
     from transformers import (
     AutoTokenizer
     )
 
-    BASE_ROOT = settings["BASE_ROOT"]
+    BASE_ROOT = r"C:\\work\\llm_test"
+    # BASE_ROOT = settings["BASE_ROOT"]
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
@@ -168,7 +169,7 @@ def main():
         print(f"for {k} type\tmin len is\t{v['min_len']}\t{v['min_desc']}\n"
               f"and max len is {v['max_len']}\t{v['max_desc']}\n")
     
-    # plot_single_histograms(stat)
+    plot_single_histograms(stat)
 
 if __name__ == "__main__":
     main()
