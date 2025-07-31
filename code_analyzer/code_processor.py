@@ -154,34 +154,32 @@ class CodeExtractor:
         
         return parent_id, parent_type, parent_name
 
-    def _process_type_alias(self, cursor) -> None:
-        """Обрабатывает объявления типа через using (type aliases)"""
-        if self._is_inside_class_or_function(cursor):
-            return True
-            
-        self.log(f"{cursor.kind}:\t_process_type_alias {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+    def _extract_common_element_data(self, cursor) -> Dict:
+        parent_id, parent_type, parent_name = self._get_parent_info(cursor)   
         context = self.range_locator.get_context(cursor)
         comments = self._get_comments_before_cursor(cursor)
-        
-        element = {
+        return {
             "id": self.element_tracker.generate_element_id(cursor),
             "type": cursor.kind.name.lower(),
             "name": self.element_tracker.generate_name(cursor),
-            # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
             "line": cursor.location.line,
             "parent_id": parent_id,
             "parent_type": parent_type,
             "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
             "context_before": context["context_before"],
             "context_after": context["context_after"],
             "comments": comments["comments"],
             "docstrings": comments["docstrings"]
         }
-        
+
+    def _process_type_alias(self, cursor) -> None:
+        """Обрабатывает объявления типа через using (type aliases)"""
+        if self._is_inside_class_or_function(cursor):
+            return True            
+        self.log(f"{cursor.kind}:\t_process_type_alias {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")       
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
     
@@ -191,31 +189,11 @@ class CodeExtractor:
             return True
         if not cursor.is_definition():
             return True
-
         self.log(f"{cursor.kind}:\t_process_union {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "size": cursor.type.get_size(),
-            "fields": self._get_union_fields(cursor),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["size"] = cursor.type.get_size()
+        element["fields"] = self._get_union_fields(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
     
@@ -235,66 +213,25 @@ class CodeExtractor:
     def _process_using_directive(self, cursor) -> None:
         """Обрабатывает директивы using для пространств имен"""
         self.log(f"{cursor.kind}:\t_process_using_directive in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
         # Получаем имя импортируемого пространства имен
         namespace = None
         for child in cursor.get_children():
             if child.kind == CursorKind.NAMESPACE_REF:
                 namespace = child.spelling
                 break
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "namespace": namespace,
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["namespace"] = namespace
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
            
     def _process_typedef(self, cursor) -> None:
         """Обрабатывает typedef объявления"""
         if self._is_inside_class_or_function(cursor):
-            return True
-            
+            return True   
         self.log(f"{cursor.kind}:\t_process_typedef {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-        
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            # "underlying_type": cursor.underlying_typedef_type.spelling if cursor.underlying_typedef_type else "unknown",
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -302,32 +239,12 @@ class CodeExtractor:
         """Обрабатывает объявления переменных (глобальных и в пространствах имен)"""
         if self._is_inside_class_or_function(cursor):
             return True
-            
         self.log(f"{cursor.kind}:\t_process_variable {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-        
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "var_type": cursor.type.spelling,
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "is_const": cursor.type.is_const_qualified(),
-            "is_static": cursor.storage_class == StorageClass.STATIC,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["var_type"] = cursor.type.spelling
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["is_const"] = cursor.type.is_const_qualified()
+        element["is_static"] = cursor.storage_class == StorageClass.STATIC        
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -339,31 +256,11 @@ class CodeExtractor:
         """Обрабатывает объявления enum"""
         if self._is_inside_class_or_function(cursor):
             return True
-            
         self.log(f"{cursor.kind}:\t_process_enum {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-        
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "is_scoped": cursor.is_scoped_enum(),
-            "underlying_type": cursor.enum_type.spelling if cursor.enum_type else "int",
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["is_scoped"] = cursor.is_scoped_enum()
+        element["underlying_type"] = cursor.enum_type.spelling if cursor.enum_type else "int"
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -387,176 +284,58 @@ class CodeExtractor:
         if not cursor.is_definition():
             self.log(f"!!not cursor.is_definition():\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
             return
-
         self.log(f"{cursor.kind.name}:\t_process_class {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "column": cursor.location.column,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return False
 
     def _process_class_template(self, cursor) -> None:
         self.log(f"{cursor.kind.name}:\t_process_class_template {cursor.spelling or f"anon_template_{cursor.location.line}"} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "full_body": self.template_extractor.get_template_method_body(cursor),
-            "template_parameters": self._get_template_parameters(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["template_parameters"] = self._get_template_parameters(cursor)
         self.data_storage.add_element(element["type"], element)
         return False
 
     def _process_method(self, cursor) -> None:
-        
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        
-        self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} of {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}", 3)
-
-        code = self.range_locator.get_code_snippet(cursor)
+        self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         is_defined = cursor.is_definition()
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "signature": self._get_function_signature(cursor),
-            "code": code,
-            "is_defined": str(is_defined),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "is_template": parent_type in ("class_template", "class_template_partial_specialization"),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["signature"] = self._get_function_signature(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["is_defined"] = str(is_defined)      
         self.data_storage.add_element(element["type"], element)
         return True
 
     def _process_function(self, cursor) -> None:
-
-        self.log(f"{cursor.kind}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
+        self.log(f"{cursor.kind.name}:\t_process_method {cursor.spelling} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         is_defined = cursor.is_definition()
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "signature": self._get_function_signature(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "is_defined": str(is_defined),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
-        
+        element = self._extract_common_element_data(cursor)
+        element["signature"] = self._get_function_signature(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
+        element["is_defined"] = str(is_defined)        
         self.data_storage.add_element(element["type"], element)
         return True
 
     def _process_function_template(self, cursor) -> None:    
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        self.log(f"{cursor.kind.name}:\t_process_function_template {cursor.spelling} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}", 3)
-        
+        self.log(f"{cursor.kind.name}:\t_process_function_template {cursor.spelling} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
         code = self.range_locator.get_code_snippet(cursor)
         is_defined = cursor.is_definition()
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "signature": self._get_function_signature(cursor),
-            "code": code,
-            "is_defined": str(is_defined),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "is_template": True,
-            "template_parameters": self._get_template_parameters(cursor),
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-        "comments": comments["comments"],
-        "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
+        element["signature"] = self._get_function_signature(cursor)
+        element["code"] = code
+        element["is_defined"] = str(is_defined)
+        element["template_parameters"] = self._get_template_parameters(cursor)
         self.data_storage.add_element(element["type"], element)
-
         return True
 
     def _process_namespace(self, cursor) -> None:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         _name = self.element_tracker.generate_name(cursor)
         self.log(f"{cursor.kind.name}:\t_process_namespace {_name} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": _name,
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
         self.data_storage.add_element(element["type"], element)
         return False
 
@@ -564,92 +343,25 @@ class CodeExtractor:
         parent_id, parent_type, parent_name = self._get_parent_info(cursor)
         _name = self.element_tracker.generate_name(cursor)
         self.log(f"{cursor.kind.name}:\t_process_lambda {_name} of {parent_type} : {parent_name} in {self.file_processor.get_relative_path(cursor.location.file.name)}")
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": _name,
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
 
     def _process_preprocessor_directive(self, cursor) -> None:
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
 
     def _process_macro(self, cursor) -> None:
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
 
     def _process_literal(self, cursor) -> None:
-        parent_id, parent_type, parent_name = self._get_parent_info(cursor)
-        context = self.range_locator.get_context(cursor)
-        comments = self._get_comments_before_cursor(cursor)
-
-        element = {
-            "id": self.element_tracker.generate_element_id(cursor),
-            "type": cursor.kind.name.lower(),
-            "name": self.element_tracker.generate_name(cursor),
-            "code": self.range_locator.get_code_snippet(cursor),
-            "location": self.file_processor.get_relative_path(cursor.location.file.name),
-            "line": cursor.location.line,
-            "parent_id": parent_id,
-            "parent_type": parent_type,
-            "parent_name": parent_name,
-            "context_before": context["context_before"],
-            "context_after": context["context_after"],
-            "comments": comments["comments"],
-            "docstrings": comments["docstrings"]
-        }
+        element = self._extract_common_element_data(cursor)
+        element["code"] = self.range_locator.get_code_snippet(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -662,6 +374,10 @@ class CodeExtractor:
 
     def visit_node(self, cursor):
         if cursor.kind == CursorKind.TRANSLATION_UNIT:
+            cursor_id = self.element_tracker.generate_element_id(cursor)
+            if self.element_tracker.is_processed(cursor_id):
+                return
+            self.element_tracker.mark_processed(cursor_id)
             for child in cursor.get_children():
                 self.visit_node(child)
             return
@@ -709,8 +425,8 @@ def main() -> None:
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
-    # PROJ_NAME = r"cppTango-9.3.7"
-    PROJ_NAME = r"template_exampl"
+    PROJ_NAME = r"cppTango-9.3.7"
+    # PROJ_NAME = r"template_exampl"
     # PROJ_NAME = r"template_test_simple"
     # PROJ_NAME = r"ifdef_example"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)

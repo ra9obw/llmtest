@@ -81,7 +81,7 @@ def show_elements(_file = INPUT_JSONL):
             if True:     
                 _code = entry.get("code", "")
                 _is_defined = entry.get("is_defined", "None")
-                _desc = f"{entry['type']}:\t{entry["name"]}\twith type {entry["type"]}\tparent nema: {entry["parent_name"]}\tparent type: {entry["parent_type"]}\tat {entry["location"]}:{entry["line"]}\t\tcode length {len(_code)}\tis_defined: {_is_defined}"
+                _desc = f"{entry['type']}:\t{entry["name"]}\twith type {entry["type"]}\tparent nema: {entry["parent_name"]}\tparent type: {entry["parent_type"]}\tat {entry["location"]}:{entry["line"]}\tcode length {len(_code)}\tis_defined: {_is_defined}"
                 _doc = entry.get("docstring", "")
                 _sgntr = entry.get("signature", "")
                 _body =  entry.get("full_body", "")
@@ -89,8 +89,8 @@ def show_elements(_file = INPUT_JSONL):
                 _docstring = "".join([el["text"] for el in entry["docstrings"]])
 
                 print(f"{_desc}")
-                print("comment is\n", _comment)
-                print("docstring is", _docstring)
+                # print("comment is\n", _comment)
+                # print("docstring is", _docstring)
                 # print(_doc)
                 # print(_sgntr)
                 # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")

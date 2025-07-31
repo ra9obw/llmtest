@@ -127,8 +127,8 @@ def main():
     with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
         for line in in_f:
             entry = json.loads(line)
-            _code = entry["data"].get("code", "")
-            _desc = f"{entry['data']['name']} in {entry['data']['location']}:{entry['data']['line']}"
+            _code = entry.get("code", "")
+            _desc = f"{entry['name']} in {entry['location']}:{entry['line']}"
 
             # _len = len(_code)
             _code = clean_cpp_code(_code)
@@ -141,7 +141,7 @@ def main():
                     "min_desc": _desc, 
                     "max_len": _len, 
                     "min_len": _len, 
-                    entry["data"]["name"]: {
+                    entry["name"]: {
                         "length": _len, 
                         "lines": len(_code.split("\n")), 
                         "lines_length": [len(x) for x in _code.split("\n")]
@@ -158,7 +158,7 @@ def main():
                     stat_type["min_desc"] = _desc
                     stat_type["min_len"] = _len
                     
-                stat_type[entry["data"]["name"]] = {
+                stat_type[entry["name"]] = {
                     "length": _len, 
                     "lines": len(_code.split("\n")), 
                     "lines_length": [len(x) for x in _code.split("\n")]
