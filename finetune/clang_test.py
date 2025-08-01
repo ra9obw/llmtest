@@ -90,7 +90,7 @@ for crsr in crsrs:
     print(crsr.name.lower())
 
 
-# lass_decl
+# class_decl
 # struct_decl
 # class_template
 # class_template_partial_specialization

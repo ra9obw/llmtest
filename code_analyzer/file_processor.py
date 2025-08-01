@@ -54,7 +54,11 @@ class FileProcessor(IFileProcessor):
             '-x', 'c++',
             '-fparse-all-comments',
             '-D__clang__',
-            '-fno-delayed-template-parsing'
+            '-fno-delayed-template-parsing',
+            '-IC:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
+            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
+            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
+            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
         ]
         args.extend(arg for include_dir in self.include_dirs 
                    for arg in ['-I', include_dir])

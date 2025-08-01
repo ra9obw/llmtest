@@ -1,3 +1,7 @@
+import re
+import os
+import json
+from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from transformers import (
     AutoTokenizer
@@ -56,6 +60,28 @@ class DsTransformerBase:
         self._tkn = tkn
         self.fragmenter = fragmenter
 
+    def clean_cpp_code(self, code):
+        code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)  # /* ... */
+        code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)  # // ...
+        code = re.sub(r'///.*?$', '', code, flags=re.MULTILINE)  # /// ...
+        code = re.sub(r'//!.*?$', '', code, flags=re.MULTILINE)  # //! ...
+        code = re.sub(r'[ \t]+', ' ', code)
+        code = re.sub(r' ([<>{}\[\]();,&*:]|::)', r'\1', code)
+        code = re.sub(r'([<>{}\[(::*&]) ', r'\1', code)
+        code = '\n'.join(line.strip() for line in code.split('\n') if line.strip())
+        return code
+    
+    def transform(self, element: Dict) -> Dict:
+        """Transform the input element."""
+        raise NotImplementedError
+
+
+class FunctionsTransformer(DsTransformerBase):
+    """Generic code transformer that can handle different element types."""
+    
+    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None):
+        super().__init__(max_tokens, tkn)
+    
     def _do_fullcode_instruction(self, element: Dict) -> str:
         return generate_instruction(element, GenerationMode.FULL)
     
@@ -67,6 +93,29 @@ class DsTransformerBase:
 
     def _do_fragcode_tail(self, element: Dict) -> str:
         return generate_instruction(element, GenerationMode.LAST_FRAGMENT)    
+
+    def _get_parameters(self, signature):
+        parameters = []
+        for param in signature["parameters"]:
+            param_str = f"{param['type']}"
+            if param["name"]:
+                param_str += f"_{param['name']}"
+            if param["default_value"] is not None:
+                param_str += f"[{param['default_value']}]"
+            parameters.append(param_str)
+        return parameters
+
+    def generate_full_name(self, element):
+        _name = element["type"] + "_" + element["name"]
+        if element["parent_type"] != "translation_unit":
+            _name = element["parent_type"] + "_" + element["parent_name"] + "_" + _name
+        signature = element["signature"]
+        _name += f"_ret_{signature["return_type"]}"
+        parameters = self._get_parameters(signature)
+        if len(parameters) != 0:
+            _name += '_'
+            _name += '_'.join(parameters)
+        return _name
 
     def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
         """Generate header part of the transformed code."""
@@ -106,7 +155,7 @@ class DsTransformerBase:
     
     def _restore_cpp_function(self, element: Dict) -> str:
         return generate_signature(element)
-    
+
     def _func_transform(self, element: Dict) -> Dict:
         """Transform a single function element."""
         _ret = {"code_writing": [], "doc_generation": []}
@@ -136,20 +185,67 @@ class DsTransformerBase:
         return _ret
     
     def transform(self, element: Dict) -> Dict:
-        """Transform the input element."""
-        raise NotImplementedError
-
-
-class FunctionsTransformer(DsTransformerBase):
-    """Generic code transformer that can handle different element types."""
+        return self._func_transform(element)
     
+
+class ClassTransformer(DsTransformerBase):
+
     def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None):
         super().__init__(max_tokens, tkn)
-    
-    def transform(self, element: Dict) -> Dict:
-        return self._func_transform(element)
 
+    def generate_full_name(self, element):
+        name = element["type"] + "_" + element["name"]
+        if element["parent_type"] != "translation_unit":
+            name = element["parent_type"] + "_" + element["parent_name"] + "_" + name
+        return name
 
+class DatasetTransformer():
+    def __init__(self, input_path, repo_name):
+        self.dstkn = DsTokenCounter()
+        self.ft = FunctionsTransformer(tkn = self.dstkn)
+        self.cl = ClassTransformer(tkn = self.dstkn)
+        self.input_file = os.path.join(input_path, f"dataset_clang_{repo_name}.jsonl")
+        self.output_file_code_ft = os.path.join(input_path, f"dataset_code_finetune_{repo_name}.jsonl")
+        self.output_file_doc_ft = os.path.join(input_path, f"dataset_doc_finetune_{repo_name}.jsonl")
+        self.functions = {}
+        self.classes = {}
+
+    def _extract_function(self, entry):
+        name = self.ft.generate_full_name(entry)
+        # print(f"function name:\t{name}")
+        if name not in self.functions.keys():
+            self.functions[name] = {"definition": None, "declaration": None, "def_cnt": 0, "decl_cnt": 0}
+        if entry["is_defined"]:
+            self.functions[name]["def_cnt"] += 1
+            if self.functions[name]["definition"] is not None:
+                print(f"func {name} \"definition\" is not None!\t{entry["location"]}:{entry["line"]}")
+            else:
+                self.functions[name]["definition"] = entry
+        else:
+            self.functions[name]["decl_cnt"] += 1
+            if self.functions[name]["declaration"] is not None:
+                print(f"func {name} \"declaration\" is not None!\t{entry["location"]}:{entry["line"]}")
+            else:
+                self.functions[name]["declaration"] = entry
+
+    def _extract_class(self, entry):
+        name = self.cl.generate_full_name(entry)
+        # print(f"class name:\t{name}")
+        if name not in self.classes.keys():
+            self.classes[name] = {"definition": entry, "def_cnt": 1}
+        else:
+            self.classes[name]["def_cnt"] += 1
+            print(f"class {name} defiend Again!\t{entry["location"]}:{entry["line"]}")
+
+    def prepare_lists(self):
+        with open(self.input_file, "r", encoding="utf-8") as in_f:
+            for line in in_f:
+                entry = json.loads(line)
+                if entry['type'] in ("cxx_method", "constructor", "destructor", "function_decl", "function_template"):
+                    self._extract_function(entry)
+                elif entry['type'] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
+                    self._extract_class(entry)
+        print(f"functions count: {len(self.functions)};\tclass count: {len(self.classes)}")
 
 if __name__ == "__main__":
 
@@ -183,3 +279,8 @@ if __name__ == "__main__":
     # print(ft.transform(_code_element))
     # # print(ft.transform(element))
     # # print(ft._restore_cpp_function(signature))
+    # REPO_NAME = "template_exampl"
+    REPO_NAME = "cppTango-9.3.7"
+
+    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
+    dt.prepare_lists()

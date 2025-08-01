@@ -130,11 +130,13 @@ class CodeExtractor:
         for i, arg in enumerate(cursor.get_arguments()):
             param = {
                 "name": arg.spelling or f"param_{i}",
-                "type": arg.type.spelling,
+                "type": arg.type.get_canonical().spelling,
                 "default_value": self._get_default_value(arg)
             }
             signature["parameters"].append(param)
         
+        print(signature["parameters"])
+
         return signature
 
     def _get_default_value(self, arg) -> Optional[str]:
@@ -304,7 +306,7 @@ class CodeExtractor:
         element = self._extract_common_element_data(cursor)
         element["signature"] = self._get_function_signature(cursor)
         element["code"] = self.range_locator.get_code_snippet(cursor)
-        element["is_defined"] = str(is_defined)      
+        element["is_defined"] = is_defined
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -314,7 +316,7 @@ class CodeExtractor:
         element = self._extract_common_element_data(cursor)
         element["signature"] = self._get_function_signature(cursor)
         element["code"] = self.range_locator.get_code_snippet(cursor)
-        element["is_defined"] = str(is_defined)        
+        element["is_defined"] = is_defined
         self.data_storage.add_element(element["type"], element)
         return True
 
@@ -326,7 +328,7 @@ class CodeExtractor:
         element = self._extract_common_element_data(cursor)
         element["signature"] = self._get_function_signature(cursor)
         element["code"] = code
-        element["is_defined"] = str(is_defined)
+        element["is_defined"] = is_defined
         element["template_parameters"] = self._get_template_parameters(cursor)
         self.data_storage.add_element(element["type"], element)
         return True
@@ -425,10 +427,11 @@ def main() -> None:
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
-    PROJ_NAME = r"cppTango-9.3.7"
+    # PROJ_NAME = r"cppTango-9.3.7"
     # PROJ_NAME = r"template_exampl"
     # PROJ_NAME = r"template_test_simple"
     # PROJ_NAME = r"ifdef_example"
+    PROJ_NAME = r"signature_extraction"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 

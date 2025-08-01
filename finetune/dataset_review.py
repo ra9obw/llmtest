@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import re
 from datasets import load_dataset
@@ -41,7 +42,6 @@ INPUT_JSONL = Path(f"C:\\work\\llm_test\\dataset_clang_template_exampl.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_test_examples.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test.jsonl")
 # INPUT_JSONL = Path(f"C:\\work\\pavlenko\\llmtest-git\\dataset_clang_template_test_simple.jsonl")
-
 
 
 def get_function(_type = "classes", _name = "DeviceImpl", _file = INPUT_JSONL):
@@ -97,6 +97,99 @@ def show_elements(_file = INPUT_JSONL):
                 # print(f"body: {_body}")
                 # return _code
     # return ""
+def _get_parameters(signature):
+    parameters = []
+    for param in signature["parameters"]:
+        param_str = f"{param['type']}"
+        if param["name"]:
+            param_str += f"_{param['name']}"
+        if param["default_value"] is not None:
+            param_str += f"[{param['default_value']}]"
+        parameters.append(param_str)
+    return parameters
+
+def generate_func_full_name(element):
+    _name = element["type"] + "_" + element["name"]
+    if element["parent_type"] != "translation_unit":
+        _name = element["parent_type"] + "_" + element["parent_name"] + "_" + _name
+    signature = element["signature"]
+    _name += f"_ret_{signature["return_type"]}"
+    parameters = _get_parameters(signature)
+    if len(parameters) != 0:
+        _name += '_'
+        _name += '_'.join(parameters)
+    return _name
+
+def get_functions_set(_file = INPUT_JSONL):
+    functions = {}
+    with open(INPUT_JSONL, "r", encoding="utf-8") as in_f:
+        for line in in_f:
+            entry = json.loads(line)
+            if entry['type'] in (
+                "cxx_method",
+                "constructor",
+                "destructor",
+                "function_decl",
+                "function_template"
+            ):
+                f_name = generate_func_full_name(entry)
+                print(f_name)
+                if f_name not in functions.keys():
+                    functions[f_name] = {"definition": None, "declaration": None, "def_cnt": 0, "decl_cnt": 0}
+                if entry["is_defined"]:
+                    functions[f_name]["def_cnt"] += 1
+                    if functions[f_name]["definition"] is not None:
+                        print(f"{functions[f_name]}[\"definition\"] is not None!")
+                    else:
+                        functions[f_name]["definition"] = entry
+                else:
+                    functions[f_name]["decl_cnt"] += 1
+                    if functions[f_name]["declaration"] is not None:
+                        print(f"{functions[f_name]}[\"declaration\"] is not None!")
+                    else:
+                        functions[f_name]["declaration"] = entry
+    return functions
+
+def is_not_defined(function):
+    return function["definition"] is None
+
+def is_method(function):
+    return function["definition"]["parent_type"] in (
+        "class_decl",
+        "struct_decl",
+        "class_template",
+        "class_template_partial_specialization")
+
+def separate_function_declaration_and_body(code_str):
+    """
+    Разделяет объявление функции и её тело.
+    Предполагается, что комментарии уже удалены.
+    
+    Args:
+        code_str (str): Строка с кодом функции/метода без комментариев.
+        
+    Returns:
+        tuple: (declaration, body) - объявление и тело функции
+               Если тело не найдено, body будет пустой строкой.
+    """
+    # Ищем первую фигурную скобку
+    brace_pos = code_str.find('{')
+    
+    if brace_pos != -1:
+        declaration = code_str[:brace_pos].strip()
+        body = code_str[brace_pos:].strip()
+        return declaration, body
+    
+    # Ищем точку с запятой в конце (для однострочных функций)
+    if code_str.rstrip().endswith(';'):
+        declaration = code_str.strip()
+        return declaration, ""
+    
+    # Если ничего не найдено, вернем весь код как объявление
+    return None, None
+
+
+
 
 if __name__ == "__main__":
         # Загрузка токенизатора
@@ -112,4 +205,15 @@ if __name__ == "__main__":
     # _code = clean_cpp_code(_code)
     # input_tokens_no_trunc = tokenizer(_code, truncation=False)
     # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, tokens = {len(input_tokens_no_trunc[0])}, ratio = {len(_code)/len(input_tokens_no_trunc[0])}")
-    show_elements()
+    # fncs = get_functions_set()
+    # print(len(fncs))
+    # for nm, fn in fncs.items():
+    #     print(f"definition: {fn["definition"] is not None}\tdeclaration: {fn["declaration"] is not None}\t\t{nm}")
+    # Пример использования
+    code = "template <typename T>\nvoid ClassC::myMethod(T value) {\n    std::cout << value << std::endl;\n}"
+
+    declaration, body = separate_function_declaration_and_body(code)
+    print("Declaration:")
+    print(declaration)
+    print("\nBody:")
+    print(body)
