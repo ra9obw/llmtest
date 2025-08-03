@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Optional, Callable, Set
 from clang.cindex import Index, TranslationUnit, Config
 from interfaces import IFileProcessor
+from settings import settings
 
 class FileProcessor(IFileProcessor):
     """Default implementation of IFileProcessor for CodeExtractor."""
@@ -48,34 +49,38 @@ class FileProcessor(IFileProcessor):
         """Parse a source file and return its AST."""
         if skip_if and skip_if(str(file_path)):
             return None
-            
         args = [
             '-std=c++17',
             '-x', 'c++',
             '-fparse-all-comments',
             '-D__clang__',
             '-fno-delayed-template-parsing',
-            '-IC:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
-            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
-            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
-            '-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
         ]
-        args.extend(arg for include_dir in self.include_dirs 
+        args.extend(arg for include_dir in settings["SYSTEM_INCLUDES"] 
                    for arg in ['-I', include_dir])
-        
+        if settings["PROJECT_INCLUDES"] == None:
+            args.extend(arg for include_dir in self.include_dirs 
+                   for arg in ['-I', include_dir])
+        else:
+            args.extend(arg for include_dir in settings["PROJECT_INCLUDES"] 
+                   for arg in ['-I', include_dir])        
         return self.index.parse(str(file_path), args=args, options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
 
     def is_system_header(self, file_path: Optional[str]) -> bool:
         """Check if the file is a system header."""
-        if not file_path:
-            return True
-        return file_path.startswith('/usr/include') or \
-               file_path.startswith('/usr/local/include') or \
-               file_path.startswith('/Applications/Xcode.app/') or \
-               file_path.startswith('C:\\Program Files (x86)\\Microsoft Visual Studio') or \
-               file_path.startswith('C:\\Program Files\\Microsoft Visual Studio') or \
-               '\\Windows Kits\\' in file_path or \
-               file_path.startswith('<')
+        return not Path(file_path).is_relative_to(self.repo_path)
+
+    # def is_system_header(self, file_path: Optional[str]) -> bool:
+    #     """Check if the file is a system header."""
+    #     if not file_path:
+    #         return True
+    #     return file_path.startswith('/usr/include') or \
+    #            file_path.startswith('/usr/local/include') or \
+    #            file_path.startswith('/Applications/Xcode.app/') or \
+    #            file_path.startswith('C:\\Program Files (x86)\\Microsoft Visual Studio') or \
+    #            file_path.startswith('C:\\Program Files\\Microsoft Visual Studio') or \
+    #            '\\Windows Kits\\' in file_path or \
+    #            file_path.startswith('<')
     
     def get_relative_path(self, absolute_path: str) -> str:
         try:

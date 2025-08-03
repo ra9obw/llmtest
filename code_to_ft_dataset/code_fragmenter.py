@@ -1,8 +1,8 @@
 import json
 import math
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional
-from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind, StorageClass
+from typing import List, Dict, Tuple, Optional, Any
+from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind, StorageClass, Cursor, Diagnostic
 from dataclasses import dataclass
 import numpy as np
 
@@ -18,7 +18,31 @@ class FragmentConfig:
 class BaseFragmenter:
     def __init__(self, config: FragmentConfig):
         self.config = config
-        
+
+    def show_diagnostic(self, translation_unit):
+        if translation_unit.diagnostics:
+            for diag in translation_unit.diagnostics:
+                # Уровень серьёзности (Error, Warning, Note и т. д.)
+                severity = diag.severity  # Это число, преобразуем в читаемый формат
+                severity_name = {
+                    Diagnostic.Error: "Error",
+                    Diagnostic.Warning: "Warning",
+                    Diagnostic.Note: "Note",
+                    Diagnostic.Ignored: "Ignored",
+                    Diagnostic.Fatal: "Fatal",
+                }.get(diag.severity, f"Unknown ({diag.severity})")
+
+                # Сообщение об ошибке
+                message = diag.spelling
+
+                # Позиция в файле (если есть)
+                location = diag.location
+                file = location.file.name if location.file else "<unknown file>"
+                line = location.line
+                column = location.column
+
+                print(f"[{severity_name}] {file}:{line}:{column} - {message}")
+
     def parse_code(self, code: str) -> TranslationUnit:
         index = Index.create()
         return index.parse('tmp.cpp', args=['-std=c++17'], unsaved_files=[('tmp.cpp', code)])
@@ -106,6 +130,7 @@ class BaseFragmenter:
         """Основной метод разбиения кода класса"""
         code = code_data['code']
         tu = self.parse_code(code)
+        self.show_diagnostic(tu)
         
         # Получаем курсор для всего класса
         class_cursor = None
@@ -188,8 +213,8 @@ class ShowCursors(BaseFragmenter):
 
     def split(self, code_data: Dict) -> List[Dict]:
         """Основной метод разбиения кода класса"""
-        code = code_data['code']
-        tu = self.parse_code(code)
+        self.code = code_data['code']
+        tu = self.parse_code(self.code)
         
         # Получаем курсор для всего класса
         class_cursor = None
@@ -201,7 +226,7 @@ class ShowCursors(BaseFragmenter):
         if not class_cursor:
             raise ValueError("Class cursor not found in AST")
         
-        self.show_split_points(class_cursor, code)
+        self.show_split_points(class_cursor, self.code)
 
     def show_split_points(self, cursor, code: str) -> List[int]:
         def visit(node, idx):
@@ -301,6 +326,213 @@ class CodeFragmenter:
             print(f"- Coverage: {sum(sizes)/len(_code)*100:.1f}%")
 
 
+class SignatureExtractor:
+    def __init__(self):
+        pass
+    
+    def _find_closing_parenthesis(self, lines, start_line, start_col):
+        """
+        Находит позицию закрывающей скобки ')', начиная с указанной позиции.
+        Возвращает кортеж (line, column) или (None, None), если скобка не найдена.
+        Учитывает вложенные скобки и игнорирует скобки в строковых литералах и комментариях.
+        """
+        line_num = start_line
+        col_num = start_col
+        paren_level = 0  # Уровень вложенности скобок
+        in_string = False  # Флаг нахождения внутри строкового литерала
+        in_comment = False  # Флаг нахождения внутри комментария
+        
+        while line_num < len(lines):
+            line = lines[line_num]
+            
+            # Если это не первая строка, начинаем с начала строки
+            search_start = col_num if line_num == start_line else 0
+            
+            for i in range(search_start, len(line)):
+                char = line[i]
+                
+                # Обработка строковых литералов
+                if char == '"' and not in_comment:
+                    in_string = not in_string
+                    continue
+                    
+                # Обработка комментариев
+                if not in_string:
+                    if char == '/' and i + 1 < len(line) and line[i+1] == '*':
+                        in_comment = True
+                    elif char == '*' and i + 1 < len(line) and line[i+1] == '/':
+                        in_comment = False
+                        continue
+                    elif char == '/' and i + 1 < len(line) and line[i+1] == '/':
+                        break  # Пропускаем оставшуюся часть строки
+                        
+                if in_string or in_comment:
+                    continue
+                    
+                # Подсчет скобок
+                if char == '(':
+                    paren_level += 1
+                elif char == ')':
+                    paren_level -= 1
+                    if paren_level <= 0:
+                        return (line_num, i)
+                    
+            # Переход к следующей строке
+            line_num += 1
+            col_num = 0
+        
+        print(") not found")
+        return (max(0, len(lines)-1), max(0,len(lines[-1])-1))  # Скобка не найдена
+
+    def _extract_code_fragment(self, lines, start_line, start_col, stop_line, stop_col):
+        """
+        Извлекает фрагмент кода из lines между указанными позициями
+        Возвращает строку с извлеченным фрагментом
+        """
+        extracted = []
+        
+        # Обрабатываем однострочный случай
+        if start_line == stop_line:
+            line = lines[start_line]
+            return line[start_col:stop_col].strip()
+        
+        # Многострочный случай
+        # Первая строка (от start_col до конца строки)
+        first_line = lines[start_line][start_col:]
+        extracted.append(first_line)
+        
+        # Промежуточные строки (полностью)
+        for line_num in range(start_line + 1, stop_line):
+            extracted.append(lines[line_num])
+        
+        # Последняя строка (от начала до stop_col)
+        last_line = lines[stop_line][:stop_col]
+        extracted.append(last_line)
+        
+        # Объединяем и убираем лишние пробелы
+        return ' '.join(line.strip() for line in extracted)
+
+    def _get_function_signature(self, cursor) -> Dict[str, Any]:
+
+        lines = self.code.split('\n')
+
+        func_start_line = cursor.extent.start.line - 1  # Переводим в 0-based индекс
+        func_start_col = cursor.extent.start.column - 1
+
+        end_line, end_col = self._find_closing_parenthesis(lines, func_start_line, func_start_col)
+
+        children = list(cursor.get_children())
+        param_cursors = [c for c in children if c.kind == CursorKind.PARM_DECL]
+
+        if len(param_cursors) == 0:
+            func_stop_line = cursor.extent.end.line - 1  # Переводим в 0-based индекс
+            func_stop_col = cursor.extent.end.column - 1
+        else:
+            func_stop_line = param_cursors[0].extent.start.line - 1  # Переводим в 0-based индекс
+            func_stop_col = param_cursors[0].extent.start.column - 1
+        
+        name = cursor.spelling
+        _str = self._extract_code_fragment(lines, func_start_line, func_start_col, func_stop_line, func_stop_col)
+        frags = _str.split(name, maxsplit=1)
+        signature = {
+            "name": cursor.spelling,
+            "return_type": frags[0].strip(),
+            "parameters": [],
+            "qualifiers": {
+                "is_const": cursor.is_const_method(),
+                "is_static": cursor.is_static_method(),
+                "is_virtual": cursor.is_virtual_method(),
+                "is_pure_virtual": cursor.is_pure_virtual_method(),
+                "is_noexcept": "noexcept" in cursor.result_type.spelling,
+            }
+        }
+
+        for idx, param in enumerate(param_cursors):
+            func_start_line = param.extent.start.line - 1
+            func_start_col = param.extent.start.column - 1
+            if idx == len(param_cursors)-1:
+                func_stop_line,func_stop_col = end_line, end_col
+            else:
+                func_stop_line = param_cursors[idx+1].extent.start.line - 1  # Переводим в 0-based индекс
+                func_stop_col = param_cursors[idx+1].extent.start.column - 1
+            _str = self._extract_code_fragment(lines, func_start_line, func_start_col, func_stop_line, func_stop_col)
+            print(
+                func_start_line,
+                func_start_col,
+                func_stop_line,
+                func_stop_col
+            )
+            print(_str)
+            sp = _str.split("=")
+            if len(sp) == 2:
+                default_value = sp[1].strip()
+            else:
+                default_value = None
+            param_name = param.spelling
+            param_type = (sp[0].split(param_name))[0].strip()
+        
+            
+            signature["parameters"].append({
+                "name": param_name,
+                "type": param_type,
+                "default_value": default_value
+            })
+
+        return signature
+    
+    def parse_code(self, code: str) -> TranslationUnit:
+        index = Index.create()
+        return index.parse('tmp.cpp', args=['-std=c++17'], unsaved_files=[('tmp.cpp', code)])
+    
+    def show_diagnostic(self, translation_unit):
+        if translation_unit.diagnostics:
+            for diag in translation_unit.diagnostics:
+                # Уровень серьёзности (Error, Warning, Note и т. д.)
+                severity = diag.severity  # Это число, преобразуем в читаемый формат
+                severity_name = {
+                    Diagnostic.Error: "Error",
+                    Diagnostic.Warning: "Warning",
+                    Diagnostic.Note: "Note",
+                    Diagnostic.Ignored: "Ignored",
+                    Diagnostic.Fatal: "Fatal",
+                }.get(diag.severity, f"Unknown ({diag.severity})")
+
+                # Сообщение об ошибке
+                message = diag.spelling
+
+                # Позиция в файле (если есть)
+                location = diag.location
+                file = location.file.name if location.file else "<unknown file>"
+                line = location.line
+                column = location.column
+
+                print(f"[{severity_name}] {file}:{line}:{column} - {message}")
+
+    def extract(self, code_data: Dict):
+        self.code = code_data['code']
+        tu = self.parse_code(self.code)
+        self.show_diagnostic(tu)
+        
+        # Получаем курсор для всего класса
+        class_cursor = None
+        for cursor in tu.cursor.get_children():
+            print(cursor.spelling)
+            if cursor.spelling == code_data['name']:
+                class_cursor = cursor
+                break
+        
+        if not class_cursor:
+            raise ValueError("Class cursor not found in AST")
+        
+        def visit(node, idx):
+            print(f"{idx}: {idx*" "} {node.kind}")
+            if node.kind in [CursorKind.FUNCTION_DECL]:
+                return self._get_function_signature(node)
+            for child in node.get_children():
+                visit(child, idx+1)
+            raise ValueError(f"No {CursorKind.FUNCTION_DECL} found!")
+        return visit(cursor, 0)
+
 import re
 
 def clean_cpp_code(code):
@@ -337,31 +569,46 @@ def get_code_element(_type = "classes", _name = "DeviceImpl", _file = INPUT_JSON
         for line in in_f:
             entry = json.loads(line)
             # print(len(entry), entry['type'])
-            if entry["data"]['type'] == _type and entry["data"]["name"] == _name and entry["data"]["is_defined"] == "True":
+            if entry['type'] == _type and entry["name"] == _name and entry["is_defined"] == True:
                 
-                _desc = f"{entry['type']}:\t{entry["data"]["name"]} with type {entry["data"]["type"]}"
+                _desc = f"{entry['type']}:\t{entry["name"]} with type {entry["type"]}"
                 # _doc = entry.get("docstring", "")
-                _code = entry["data"].get("code", "")
+                _code = entry.get("code", "")
                 # _sgntr = entry.get("signature", "")
-                # _body =  entry["data"].get("full_body", "")
-                # _is_defined = entry["data"].get("is_defined", "None")
-                _comment = "".join([el["text"] for el in entry["data"]["comments"]])
-                # _docstring = "".join([el["text"] for el in entry["data"]["docstrings"]])
+                # _body =  entry.get("full_body", "")
+                # _is_defined = entry.get("is_defined", "None")
+                _comment = "".join([el["text"] for el in entry["comments"]])
+                # _docstring = "".join([el["text"] for el in entry["docstrings"]])
 
                 print(f"{_desc}")
                 print("comment is\n", _comment)
                 # print("docstring is", _docstring)
                 # print(_doc)
                 # print(_sgntr)
+                print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}")
                 # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, {[len(x) for x in _code.split("\n")]}")
-                print(f"body: {_code}")
-                return entry["data"]
+                # print(f"body: {_code}")
+                return entry
     print("Nothing Found!")
     return ""
 
 if __name__ == "__main__":
-    from settings import settings
-    Config.set_library_file(settings["CLANG_PATH"])
+    CLANG_PATH = r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll"
+    Config.set_library_file(CLANG_PATH)
+    # code_data = {}
+    # code_data["name"] = "operator<<"
+    # code_data["code"] = "inline void operator<<(DevVarCharArray &lval,const vector<unsigned char> &rval = {\"0\"});"
+    # code_data["name"] = "show"
+    # code_data["code"] = "vector<unsigned char> show (int a, vector<unsigned char>& b = {0, 1}, float c);"
+    # code_data["code"] = "const std::vector<int>& \nprocess_data(\n    const std::string& input,\n    int flags = DEFAULT_FLAGS,\n    bool verbose = false\n) noexcept;\n"
+    # code_data["name"] = "process_data"
+    # code_data["code"] = "vector<unsigned char> show();"
+    # code_data["name"] = "deep_copy"
+    # code_data["code"] = "void DeviceAttribute::deep_copy(const DeviceAttribute & source)\n{\n    w_dim_x = source.w_dim_x;\n    w_dim_y = source.w_dim_y;\n\n}"
+
+    # sh = SignatureExtractor()
+    # print(sh.extract(code_data))
+    
         # Загрузка токенизатора
     # MODEL_NAME = "Qwen/Qwen3-0.6B"
     # tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
@@ -369,18 +616,18 @@ if __name__ == "__main__":
 
     # _code_element = get_code_element(_type="structures", _name = "TimeStampComponent")
     # _code_element = get_code_element(_type="class_templates", _name = "TimedAttrData")
-    # _code_element = get_code_element(_type="methods", _name = "DeviceAttribute")
+    _code_element = get_code_element(_type="constructor", _name = "DeviceAttribute")
     # _code_element = get_code_element(_type="function_template", _name = "operator>>")
     # _code_element = get_code_element(_type="class_template", _name = "DataElement")
-    _code_element = get_code_element(_type="var_decl", _name = "val_ac_luminance")
+    # _code_element = get_code_element(_type="var_decl", _name = "val_ac_luminance")
     
     # _code_element = get_code_element()
-    print(type(_code_element))
-    _code = _code_element["code"]
+    # print(type(_code_element))
+    # _code = _code_element["code"]
 
     config = FragmentConfig(
         target_tokens=512,
-        chars_per_token=1.1,  # Для C++ обычно 3.0-3.5
+        chars_per_token=3.333,  # Для C++ обычно 3.0-3.5
         min_overlap=30
     )
     fragmenter = CodeFragmenter(config)
@@ -388,7 +635,7 @@ if __name__ == "__main__":
     fragmenter.evaluate_fragmentation(fragments, _code_element)
 
     # input_tokens_no_trunc = tokenizer(_code, truncation=False)
-    print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}")
+    # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}")
     # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, tokens = {len(input_tokens_no_trunc[0])}, ratio = {len(_code)/len(input_tokens_no_trunc[0])}")
 
     # _code = clean_cpp_code(_code)
@@ -399,16 +646,16 @@ if __name__ == "__main__":
     # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}")
     # print(f"code length {len(_code)}, lines count {len(_code.split("\n"))}, tokens = {len(input_tokens_no_trunc[0])}, ratio = {len(_code)/len(input_tokens_no_trunc[0])}")
 
-    fragmenter.visualize_fragments(fragments, _code_element)
+    # fragmenter.visualize_fragments(fragments, _code_element)
 
 
-    from transformers import (
-    AutoTokenizer
-    )
-    MODEL_NAME = "Qwen/Qwen3-0.6B"
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-    tokenizer.pad_token = tokenizer.eos_token  # Нужно для padding
+    # from transformers import (
+    # AutoTokenizer
+    # )
+    # MODEL_NAME = "Qwen/Qwen3-0.6B"
+    # tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+    # tokenizer.pad_token = tokenizer.eos_token  # Нужно для padding
 
-    for fr in fragments:
-        input_tokens_no_trunc = tokenizer(fr['code'], truncation=False)
-        print(f"tokens = {len(input_tokens_no_trunc[0])}, ratio = {len(fr['code'])/len(input_tokens_no_trunc[0])}")
+    # for fr in fragments:
+    #     input_tokens_no_trunc = tokenizer(fr['code'], truncation=False)
+    #     print(f"tokens = {len(input_tokens_no_trunc[0])}, ratio = {len(fr['code'])/len(input_tokens_no_trunc[0])}")

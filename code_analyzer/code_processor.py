@@ -3,7 +3,7 @@ from pathlib import Path
 import traceback 
 from typing import List, Dict, Any, Optional, Callable, Set
 from functools import partial
-from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind, StorageClass
+from clang.cindex import Index, CursorKind, Config, TranslationUnit, TypeKind, StorageClass, Diagnostic
 from interfaces import IElementTracker, IFileProcessor, IJsonDataStorage
 from element_tracker import ElementTracker
 from file_processor import FileProcessor
@@ -135,7 +135,7 @@ class CodeExtractor:
             }
             signature["parameters"].append(param)
         
-        print(signature["parameters"])
+        # print(signature["parameters"])
 
         return signature
 
@@ -410,9 +410,35 @@ class CodeExtractor:
             return True
         return (self.file_processor.is_system_header(file_path) or \
                (self.skip_files_func and self.skip_files_func(self.file_processor.get_relative_path(file_path))))
+    
+    def show_diagnostic(self, translation_unit, error_only = False):
+        if translation_unit.diagnostics:
+            severity_names = {
+                    Diagnostic.Error: "Error",
+                    Diagnostic.Warning: "Warning",
+                    Diagnostic.Note: "Note",
+                    Diagnostic.Ignored: "Ignored",
+                    Diagnostic.Fatal: "Fatal",
+                }
+            severity_no_crit = [Diagnostic.Warning, Diagnostic.Note, Diagnostic.Ignored]
+            for diag in translation_unit.diagnostics:
+                # Уровень серьёзности (Error, Warning, Note и т. д.)
+                severity = diag.severity  # Это число, преобразуем в читаемый формат
+                if error_only and severity in severity_no_crit:
+                    continue
+                severity_name = severity_names.get(diag.severity, f"Unknown ({diag.severity})")
+                # Сообщение об ошибке
+                message = diag.spelling
+                # Позиция в файле (если есть)
+                location = diag.location
+                file = location.file.name if location.file else "<unknown file>"
+                line = location.line
+                column = location.column
+                print(f"[{severity_name}] {file}:{line}:{column} - {message}")
 
     def process_file(self, file_path: Path) -> None:
         translation_unit = self.file_processor.parse_file(file_path, self.skip_files_func)
+        self.show_diagnostic(translation_unit, error_only=True)
         if translation_unit:
             self.visit_node(translation_unit.cursor)
 
@@ -427,11 +453,11 @@ def main() -> None:
     # PROJ_NAME = settings["PROJ_NAME"]
     # PROJ_NAME = r"simple"
     # PROJ_NAME = r"adc4x250"
-    # PROJ_NAME = r"cppTango-9.3.7"
+    PROJ_NAME = r"cppTango-9.3.7"
     # PROJ_NAME = r"template_exampl"
     # PROJ_NAME = r"template_test_simple"
     # PROJ_NAME = r"ifdef_example"
-    PROJ_NAME = r"signature_extraction"
+    # PROJ_NAME = r"signature_extraction"
     REPO_PATH = os.path.join(BASE_ROOT, "codebase", PROJ_NAME)
     OUTPUT_JSONL = os.path.join(BASE_ROOT, f"dataset_clang_{PROJ_NAME}.jsonl")
 
@@ -471,16 +497,26 @@ def main() -> None:
     data_storage = JsonDataStorage(OUTPUT_JSONL)
     extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=3)
 
-    for root, _, files in os.walk(REPO_PATH):
-        for file in files:
-            if file.endswith((".cpp", ".h", ".hpp", ".cc", ".cxx", ".tpp")):
-                file_path = Path(root) / file
-                print(f"Processing: {file_path}")
-                try:
-                    extractor.process_file(file_path)
-                except Exception as e:
-                    print(f"Error processing {file_path}: {e}")
-                    traceback.print_exc()
+    # for root, _, files in os.walk(REPO_PATH):
+    #     for file in files:
+    #         # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
+    #         if file.endswith((".cpp", ".cc", ".cxx", ".tpp")):
+    #             file_path = Path(root) / file
+    #             print(f"Processing: {file_path}")
+    #             try:
+    #                 extractor.process_file(file_path)
+    #             except Exception as e:
+    #                 print(f"Error processing {file_path}: {e}")
+    #                 traceback.print_exc()
+
+    # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
+    _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+    try:
+        extractor.process_file(_path)
+    except Exception as e:
+        print(f"Error processing {_path}: {e}")
+        traceback.print_exc()
+
     data_storage.print_statistics(unprocessed_stats = extractor.unprocessed_stats )
     data_storage.save_to_file()
     print(f"Results saved to {OUTPUT_JSONL}")

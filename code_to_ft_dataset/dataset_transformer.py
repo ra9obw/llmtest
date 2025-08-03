@@ -98,19 +98,19 @@ class FunctionsTransformer(DsTransformerBase):
         parameters = []
         for param in signature["parameters"]:
             param_str = f"{param['type']}"
-            if param["name"]:
-                param_str += f"_{param['name']}"
-            if param["default_value"] is not None:
-                param_str += f"[{param['default_value']}]"
+            # if param["name"]:
+            #     param_str += f"_{param['name']}"
+            # if param["default_value"] is not None:
+            #     param_str += f"[{param['default_value']}]"
             parameters.append(param_str)
         return parameters
 
     def generate_full_name(self, element):
-        _name = element["type"] + "_" + element["name"]
+        _name = element["name"]
         if element["parent_type"] != "translation_unit":
             _name = element["parent_type"] + "_" + element["parent_name"] + "_" + _name
         signature = element["signature"]
-        _name += f"_ret_{signature["return_type"]}"
+        # _name += f"_ret_{signature["return_type"]}"
         parameters = self._get_parameters(signature)
         if len(parameters) != 0:
             _name += '_'
@@ -155,6 +155,7 @@ class FunctionsTransformer(DsTransformerBase):
     
     def _restore_cpp_function(self, element: Dict) -> str:
         return generate_signature(element)
+
 
     def _func_transform(self, element: Dict) -> Dict:
         """Transform a single function element."""
@@ -245,7 +246,17 @@ class DatasetTransformer():
                     self._extract_function(entry)
                 elif entry['type'] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
                     self._extract_class(entry)
-        print(f"functions count: {len(self.functions)};\tclass count: {len(self.classes)}")
+        print(f"class count is {len(self.classes)}")
+        print(f"functions count is {len(self.functions)}")
+
+    def review_lists(self):
+        print(f"class count is {len(self.classes)}")
+        for name, cls in self.classes.items():
+            print(f"{name} in {cls["definition"]["location"]}:{cls["definition"]["line"]}")
+        print(f"functions count is {len(self.functions)}")
+        print("definition:declaration")
+        for name, func in self.functions.items():
+            print(f"{func["definition"] is not None}:{func["declaration"] is not None}\t{name}")
 
 if __name__ == "__main__":
 
@@ -281,6 +292,9 @@ if __name__ == "__main__":
     # # print(ft._restore_cpp_function(signature))
     # REPO_NAME = "template_exampl"
     REPO_NAME = "cppTango-9.3.7"
-
-    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
+# C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
+# C:\\work\\pavlenko\\llmtest-git
+    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
+    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME)
     dt.prepare_lists()
+    # dt.review_lists()
