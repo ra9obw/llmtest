@@ -15,6 +15,7 @@ from cxx_instruction_generator import (
 )
 from clang.cindex import Config
 import numpy as np
+import matplotlib.pyplot as plt
 
 @dataclass
 class DsTokenCounterConfig:
@@ -62,6 +63,48 @@ class DsTransformerBase:
         self.fragmenter = fragmenter
         self.code_writer = []
         self.documenter = []
+
+    def clean_docstring(self, docstring):
+        # Удаляем начальные /* и */
+        cleaned = re.sub(r'^/\*\*|\*/', '', docstring, flags=re.MULTILINE)
+        # Удаляем все * в начале строки (с возможными пробелами перед ними)
+        cleaned = re.sub(r'^\s*\* ?', '', cleaned, flags=re.MULTILINE)
+        # Заменяем множественные переносы строк на один
+        cleaned = re.sub(r'\n{2,}', '\n', cleaned)
+        # Удаляем начальные и конечные переносы строк и пробелы
+        cleaned = cleaned.strip()
+        return cleaned
+
+    def clean_comment(self, comment):
+        # Разделяем строку на отдельные строки
+        lines = comment.split('\n')
+        
+        cleaned_lines = []
+        for line in lines:
+            # Удаляем пробелы в начале и конце строки
+            stripped_line = line.strip()
+            
+            # Пропускаем пустые строки
+            if not stripped_line:
+                continue
+                
+            # Проверяем, является ли строка разделителем (начинается с // и содержит только -, +, = или пробелы)
+            if re.fullmatch(r'//[-+=]+\s*', stripped_line):
+                continue
+                
+            # Проверяем, является ли строка пустым комментарием (//, //-, //+ и т.п. без текста)
+            if re.fullmatch(r'//[-+]*\s*', stripped_line):
+                continue
+                
+            # Удаляем "//", "//-", "//+" в начале, если есть, и оставляем полезный текст
+            useful_part = re.sub(r'^//[-+]*\s*', '', stripped_line)
+            cleaned_lines.append(useful_part)
+        
+        # Объединяем оставшиеся строки через пробел и удаляем множественные пробелы
+        cleaned_text = ' '.join(cleaned_lines)
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+        
+        return cleaned_text
 
     def clean_cpp_code(self, code):
         code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)  # /* ... */
@@ -125,15 +168,19 @@ class FunctionsTransformer(DsTransformerBase):
     def _add_doc_and_comment(self, element):
         parts = []
         if element["definition"]["docstrings"]:
-            parts.append(f" using docstring {'\n'.join(element["definition"]['docstrings'][0]['text'])}")
+            _doc = self.clean_docstring('\n'.join([doc['text'] for doc in element["definition"]['docstrings']]))
+            parts.append(f" using docstring {_doc}")
         else:
             if element["declaration"] and element["declaration"]["docstrings"]:
-                parts.append(f" using docstring {'\n'.join(element["declaration"]['docstrings'][0]['text'])}")
+                _doc = self.clean_docstring('\n'.join([doc['text'] for doc in element["declaration"]['docstrings']]))
+                parts.append(f" using docstring {_doc}")
         if element["definition"]["comments"]:
-            parts.append(f" using comments {''.join(el['text'] for el in element["definition"]['comments'])}")
+            _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
+            parts.append(f" using comments {_comm}")
         else:
             if element["declaration"] and element["declaration"]["comments"]:
-                parts.append(f" using comments {''.join(el['text'] for el in element["declaration"]['comments'])}")
+                _comm = self.clean_comment(''.join(el['text'] for el in element["declaration"]['comments']))
+                parts.append(f" using comments {_comm}")
         return parts
 
     def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
@@ -151,7 +198,7 @@ class FunctionsTransformer(DsTransformerBase):
 
         parts += self._add_doc_and_comment(element)
 
-        return {"input": "".join(parts), "output": code_snippet}
+        return {"output": code_snippet, "input": "".join(parts)}
     
     def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
         """Generate body part of the transformed code."""
@@ -179,15 +226,16 @@ class FunctionsTransformer(DsTransformerBase):
 
         if (element["definition"] is None) or (element["def_cnt"] > 1) or (element["decl_cnt"] > 1):
             return
-        
+        element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         if self._tkn and self.fragmenter:
             _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
-            print(_tkn_count)
+            # print(_tkn_count)
             
         if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
             self.code_writer.append(self._header(element, element["definition"]["code"]))
         else:
-            self.fragmenter.config.chars_per_token = 0.9 * _tkn_count / len(element["definition"]["code"])
+            self.fragmenter.config.chars_per_token = 0.6 * len(element["definition"]["code"]) / _tkn_count 
+            # print(f"self.fragmenter.config.chars_per_token = {self.fragmenter.config.chars_per_token}")
             frags = self.fragmenter.split_code(element["definition"])
             
             for _idx, frag in enumerate(frags):
@@ -218,7 +266,7 @@ class ClassTransformer(DsTransformerBase):
         return name
 
 class DatasetTransformer():
-    def __init__(self, input_path, repo_name, token_counter = None):
+    def __init__(self, input_path, repo_name, token_counter: Optional[DsTokenCounter] = None):
         self.dstkn = token_counter
         self.frag = CodeFragmenter()
         self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag)
@@ -289,19 +337,63 @@ class DatasetTransformer():
         print(f"class count is {len(self.classes)}\tclass multi definition count is {_cls_multi_definition}")
         print(f"functions count is {len(self.functions)}\tnot defined: {_undefined}\tmulti deifned: {_multi_definition}\tmulti declared: {_multi_declaration}")
 
+    def plot_single_histograms(self, name, lengths):
+        """Функция для построения гистограмм длин кода по типам элементов"""
+        # Пропускаем служебные поля
+                    
+        plt.figure(figsize=(12, 7))
+        n_bins = 50
+        _, bins, _ = plt.hist(lengths, bins=n_bins, alpha=0.7, color='blue', log=True)
+        
+        # Вычисляем размер бина (берем первый интервал как пример)
+        bin_size = bins[1] - bins[0]
+        plt.title(f'{name}\n'
+                f'Total elements: {len(lengths)}, Bin size: {bin_size:.1f} chars')
+        plt.xlabel('Code length (characters)')
+        plt.ylabel('Frequency (log scale)')
+        plt.grid(True, which="both", ls="--", alpha=0.5)
+        # Добавляем вертикальные линии с полным описанием
+        plt.axvline(x=lengths.min(), color='red', linestyle='--', 
+                label=f'Min: {lengths.min()}')
+        plt.axvline(x=lengths.max(), color='green', linestyle='--', 
+                label=f'Max: {lengths.max()}')
+        # Настраиваем легенду с переносом текста
+        legend = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper center', borderaxespad=0.)
+        plt.tight_layout()
+        plt.show()
+
     def parse_functions(self):
         for name, func in self.functions.items():
             self.ft.transform(func)
         _lens = np.zeros((2, len(self.ft.code_writer)))
         for _idx, el in enumerate(self.ft.code_writer):
-            _lens[0][_idx] = len(el["input"])
-            _lens[1][_idx] = len(el["output"])
+            _lens[0][_idx] = self.dstkn.get_token_count(el["input"])
+            _lens[1][_idx] = self.dstkn.get_token_count(el["output"])
 
         print(len(self.ft.code_writer))
         # for idx in range(10):
         #     print(self.ft.code_writer[idx], "\n\n")
         for i in range(2):
             print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
+        
+        min_idx = _lens[0].argmin()
+        max_idx = _lens[0].argmax()
+        print(f"min input is {self.ft.code_writer[min_idx]}")
+        print(f"max input is {self.ft.code_writer[max_idx]}")
+
+        min_idx = _lens[1].argmin()
+        max_idx = _lens[1].argmax()
+        print(f"min output is {self.ft.code_writer[min_idx]}")
+        print(f"max output is {self.ft.code_writer[max_idx]}")
+
+        self.plot_single_histograms("input", _lens[0])
+        self.plot_single_histograms("output", _lens[1])
+
+    def save_data(self):
+        with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
+            for element in self.ft.code_writer:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
 
 if __name__ == "__main__":
 
@@ -343,3 +435,4 @@ if __name__ == "__main__":
     dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
     dt.parse_functions()
+    dt.save_data()

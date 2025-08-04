@@ -82,12 +82,15 @@ class CodeExtractor:
         start_line = cursor.location.line
         
         # Get the previous significant cursor position to determine search range
-        prev_cursor_pos = self.range_locator.get_previous_cursor_position(cursor)
+        _verbose = False
+        if "command.h" in cursor.location.file.name and start_line == 2587:
+            _verbose = True
+        prev_cursor_pos = self.range_locator.get_previous_cursor_position(cursor, _verbose)
         
         if not prev_cursor_pos:
             search_start = 1  # Start from beginning of file if no previous cursor
         else:
-            search_start = prev_cursor_pos["line"]
+            search_start = prev_cursor_pos["end_line"]
         
         # Extract comments between previous cursor and current cursor
         comments = []
@@ -485,7 +488,8 @@ def main() -> None:
 
 
     tango_codebase_stop_list = [
-        "cpp_test_suite"
+        "cpp_test_suite",
+        "idl"
     ]
     def should_skip_file(filename):
         for pattern in tango_codebase_stop_list:
@@ -497,26 +501,27 @@ def main() -> None:
     data_storage = JsonDataStorage(OUTPUT_JSONL)
     extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=3)
 
-    for root, _, files in os.walk(REPO_PATH):
-        for file in files:
-            # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
-            if file.endswith((".cpp", ".cc", ".cxx")):
-                file_path = Path(root) / file
-                print(f"Processing: {file_path}")
-                try:
-                    extractor.process_file(file_path)
-                except Exception as e:
-                    print(f"Error processing {file_path}: {e}")
-                    traceback.print_exc()
+    # for root, _, files in os.walk(REPO_PATH):
+    #     for file in files:
+    #         # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
+    #         if file.endswith((".cpp", ".cc", ".cxx")):
+    #             file_path = Path(root) / file
+    #             print(f"Processing: {file_path}")
+    #             try:
+    #                 extractor.process_file(file_path)
+    #             except Exception as e:
+    #                 print(f"Error processing {file_path}: {e}")
+    #                 traceback.print_exc()
 
     # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
     # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+    _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
     
-    # try:
-    #     extractor.process_file(_path)
-    # except Exception as e:
-    #     print(f"Error processing {_path}: {e}")
-    #     traceback.print_exc()
+    try:
+        extractor.process_file(_path)
+    except Exception as e:
+        print(f"Error processing {_path}: {e}")
+        traceback.print_exc()
 
     data_storage.print_statistics(unprocessed_stats = extractor.unprocessed_stats )
     data_storage.save_to_file()

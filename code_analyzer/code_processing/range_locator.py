@@ -40,6 +40,8 @@ class RangeLocator(IRangeLocator):
                     "level": level,
                     "line": node.location.line,
                     "column": node.location.column,
+                    "end_line": node.extent.end.line,
+                    "end_col": node.extent.end.column,
                     "file": node.location.file.name,
                     "kind": node.kind
                 })
@@ -97,6 +99,8 @@ class RangeLocator(IRangeLocator):
                 "line": pos["line"],
                 "column": pos["column"],
                 "level": pos["level"],
+                "end_line": pos["end_line"],
+                "end_col": pos["end_col"],
                 "kind": str(pos["kind"]),
                 "is_current": pos["cursor"] == cursor
             })
@@ -124,12 +128,14 @@ class RangeLocator(IRangeLocator):
                 "line": next_cursor["line"],
                 "column": next_cursor["column"],
                 "level": next_cursor["level"],
+                "end_line": next_cursor["end_line"],
+                "end_col": next_cursor["end_col"],
                 "kind": next_cursor["kind"]
             }
             
         return None
     
-    def get_previous_cursor_position(self, cursor: Cursor) -> Optional[Dict]:
+    def get_previous_cursor_position(self, cursor: Cursor, verbose) -> Optional[Dict]:
         """Get the position of the previous cursor at the same or higher level before the current one."""
         siblings = self.get_sibling_and_parent_positions(cursor)
         if not siblings:
@@ -142,7 +148,8 @@ class RangeLocator(IRangeLocator):
         
         if current_index == -1:
             return None
-            
+        if verbose:
+            print(self._file_positions_cache[cursor.location.file.name])    
         # Ищем предыдущие позиции с уровнем <= текущему
         for i in range(current_index - 1, -1, -1):
             if siblings[i]["level"] <= siblings[current_index]["level"]:
@@ -151,6 +158,8 @@ class RangeLocator(IRangeLocator):
                     "line": siblings[i]["line"],
                     "column": siblings[i]["column"],
                     "level": siblings[i]["level"],
+                    "end_line": siblings[i]["end_line"],
+                    "end_col": siblings[i]["end_col"],
                     "kind": siblings[i]["kind"]
                 }
         

@@ -22,7 +22,7 @@ class BaseFragmenter:
         Config.set_library_file(CLANG_PATH)
 
     def show_diagnostic(self, translation_unit):
-        if translation_unit.diagnostics:
+        if translation_unit and translation_unit.diagnostics:
             for diag in translation_unit.diagnostics:
                 # Уровень серьёзности (Error, Warning, Note и т. д.)
                 severity = diag.severity  # Это число, преобразуем в читаемый формат
@@ -33,17 +33,14 @@ class BaseFragmenter:
                     Diagnostic.Ignored: "Ignored",
                     Diagnostic.Fatal: "Fatal",
                 }.get(diag.severity, f"Unknown ({diag.severity})")
-
                 # Сообщение об ошибке
                 message = diag.spelling
-
                 # Позиция в файле (если есть)
                 location = diag.location
                 file = location.file.name if location.file else "<unknown file>"
                 line = location.line
                 column = location.column
-
-                print(f"[{severity_name}] {file}:{line}:{column} - {message}")
+                # print(f"[{severity_name}] {file}:{line}:{column} - {message}")
 
     def parse_code(self, code: str) -> TranslationUnit:
         index = Index.create()
@@ -67,6 +64,7 @@ class BaseFragmenter:
     def calculate_fragments(self, code: str, split_points: List[int]) -> List[Tuple[int, int]]:
         """Вычисление фрагментов с унифицированной нормализацией границ"""
         target_chars = int(self.config.target_tokens * self.config.chars_per_token)
+        # print(f"target_chars = {target_chars}\tself.config.chars_per_token = {self.config.chars_per_token}")
         fragments = []
         n = len(code)
         self.full_code_len = n
@@ -87,7 +85,7 @@ class BaseFragmenter:
             )
             if boundary <= search_start:
                 boundary = pos
-                print("No valid boundary found!")
+                # print("No valid boundary found!")
             return boundary
 
         while True:
@@ -269,7 +267,7 @@ class VarFragmenter(BaseFragmenter):
             )
             if boundary <= search_start:
                 boundary = pos
-                print("No valid boundary found!")
+                # print("No valid boundary found!")
             return boundary
 
         while True:
