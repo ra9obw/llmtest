@@ -110,6 +110,11 @@ def create_instruction_generator(element):
         return ConstructorTransformer(element)
     elif element["type"] == "destructor":
         return DestructorTransformer(element)
+    elif element["type"] == "function_template":
+        if element["parent_type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
+            return CxxMethodTransformer(element)
+        else:
+            return FunctionTransformer(element)
     else:
         raise NotImplementedError(f"Instruction generator for {element["type"]} not implemented!")
     

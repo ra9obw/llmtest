@@ -120,6 +120,11 @@ def create_signature_generator(element):
         return ConstructorSignatureGenerator(element)
     elif element["type"] == "destructor":
         return DestructorSignatureGenerator(element)
+    elif element["type"] == "function_template":
+        if element["parent_type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
+            return MethodSignatureGenerator(element)
+        else:
+            return FunctionSignatureGenerator(element)
     else:
         raise NotImplementedError(f"Signature generator for {element["type"]} not implemented!")
     

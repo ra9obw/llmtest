@@ -18,6 +18,8 @@ class FragmentConfig:
 class BaseFragmenter:
     def __init__(self, config: FragmentConfig):
         self.config = config
+        CLANG_PATH = r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll"
+        Config.set_library_file(CLANG_PATH)
 
     def show_diagnostic(self, translation_unit):
         if translation_unit.diagnostics:
@@ -139,10 +141,12 @@ class BaseFragmenter:
                 class_cursor = cursor
                 break
         
-        if not class_cursor:
-            raise ValueError("Class cursor not found in AST")
-        
-        split_points = self.get_split_points(class_cursor, code)
+        # if not class_cursor:
+            # raise ValueError("Class cursor not found in AST")
+        if class_cursor:
+            split_points = self.get_split_points(class_cursor, code)
+        else: 
+            split_points = []
         # print(f"split_points: {split_points}")
         fragments = self.calculate_fragments(code, split_points)
         
@@ -482,7 +486,7 @@ class SignatureExtractor:
     
     def parse_code(self, code: str) -> TranslationUnit:
         index = Index.create()
-        return index.parse('tmp.cpp', args=['-std=c++17'], unsaved_files=[('tmp.cpp', code)])
+        return index.parse('tmp.cpp', args=['-std=c++14'], unsaved_files=[('tmp.cpp', code)])
     
     def show_diagnostic(self, translation_unit):
         if translation_unit.diagnostics:

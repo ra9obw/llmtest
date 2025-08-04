@@ -13,7 +13,8 @@ from cxx_instruction_generator import (
     GenerationMode,
     generate_instruction
 )
-
+from clang.cindex import Config
+import numpy as np
 
 @dataclass
 class DsTokenCounterConfig:
@@ -59,6 +60,8 @@ class DsTransformerBase:
         self.max_tokens = max_tokens
         self._tkn = tkn
         self.fragmenter = fragmenter
+        self.code_writer = []
+        self.documenter = []
 
     def clean_cpp_code(self, code):
         code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)  # /* ... */
@@ -79,20 +82,20 @@ class DsTransformerBase:
 class FunctionsTransformer(DsTransformerBase):
     """Generic code transformer that can handle different element types."""
     
-    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None):
-        super().__init__(max_tokens, tkn)
+    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None, fragmenter: Optional[CodeFragmenter] = None):
+        super().__init__(max_tokens, tkn, fragmenter)
     
     def _do_fullcode_instruction(self, element: Dict) -> str:
-        return generate_instruction(element, GenerationMode.FULL)
+        return generate_instruction(element["definition"], GenerationMode.FULL)
     
     def _do_fragcode_header(self, element: Dict) -> str:
-        return generate_instruction(element, GenerationMode.FIRST_FRAGMENT)
+        return generate_instruction(element["definition"], GenerationMode.FIRST_FRAGMENT)
 
     def _do_fragcode_body(self, idx: str, element: Dict) -> str:
-        return generate_instruction(element, GenerationMode.NEXT_FRAGMENT, idx)
+        return generate_instruction(element["definition"], GenerationMode.NEXT_FRAGMENT, idx)
 
     def _do_fragcode_tail(self, element: Dict) -> str:
-        return generate_instruction(element, GenerationMode.LAST_FRAGMENT)    
+        return generate_instruction(element["definition"], GenerationMode.LAST_FRAGMENT)    
 
     def _get_parameters(self, signature):
         parameters = []
@@ -110,12 +113,28 @@ class FunctionsTransformer(DsTransformerBase):
         if element["parent_type"] != "translation_unit":
             _name = element["parent_type"] + "_" + element["parent_name"] + "_" + _name
         signature = element["signature"]
+        if signature["qualifiers"]["is_const"]:
+            _name += "_const_"
         # _name += f"_ret_{signature["return_type"]}"
         parameters = self._get_parameters(signature)
         if len(parameters) != 0:
             _name += '_'
             _name += '_'.join(parameters)
         return _name
+    
+    def _add_doc_and_comment(self, element):
+        parts = []
+        if element["definition"]["docstrings"]:
+            parts.append(f" using docstring {'\n'.join(element["definition"]['docstrings'][0]['text'])}")
+        else:
+            if element["declaration"] and element["declaration"]["docstrings"]:
+                parts.append(f" using docstring {'\n'.join(element["declaration"]['docstrings'][0]['text'])}")
+        if element["definition"]["comments"]:
+            parts.append(f" using comments {''.join(el['text'] for el in element["definition"]['comments'])}")
+        else:
+            if element["declaration"] and element["declaration"]["comments"]:
+                parts.append(f" using comments {''.join(el['text'] for el in element["declaration"]['comments'])}")
+        return parts
 
     def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
         """Generate header part of the transformed code."""
@@ -124,16 +143,14 @@ class FunctionsTransformer(DsTransformerBase):
         parts = [
             _instruction,
             f" with signature {self._restore_cpp_function(element)}",
-            f" located at file: {element['location']}, line:{element['line']}"
+            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
         ]
         
-        if element["context_before"]:
-            parts.append(f"\nContext before is: \"{'\n'.join(element['context_before'])}\"")
-        if element["docstrings"]:
-            parts.append(f" using docstring {'\n'.join(element['docstrings'])}")
-        if element["comments"]:
-            parts.append(f" using comments {''.join(el['text'] for el in element['comments'])}")
-            
+        if element["definition"]["context_before"]:
+            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
+
+        parts += self._add_doc_and_comment(element)
+
         return {"input": "".join(parts), "output": code_snippet}
     
     def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
@@ -143,43 +160,43 @@ class FunctionsTransformer(DsTransformerBase):
         parts = [
             _instruction,
             f" with signature {self._restore_cpp_function(element)}",
-            f" located at file {element['location']}"
+            f" located at file {element["definition"]['location']}"
         ]
         
-        if element["docstrings"]:
-            parts.append(f" using docstring {'\n'.join(element['docstrings'])}")
-        if element["comments"]:
-            parts.append(f" using comments {'\n'.join(element['comments'])}")
-            
+        parts += self._add_doc_and_comment(element)            
         return {"input": "".join(parts), "output": code_snippet}
     
     def _restore_cpp_function(self, element: Dict) -> str:
-        return generate_signature(element)
+        if element["declaration"] is not None:
+            return element["declaration"]["code"]
+        else:    
+            return generate_signature(element["definition"])
 
 
-    def _func_transform(self, element: Dict) -> Dict:
+    def _func_transform(self, element: Dict):
         """Transform a single function element."""
         _ret = {"code_writing": [], "doc_generation": []}
+
+        if (element["definition"] is None) or (element["def_cnt"] > 1) or (element["decl_cnt"] > 1):
+            return
         
-        if element.get("is_defined") != "True":
-            return _ret
-            
         if self._tkn and self.fragmenter:
-            _tkn_count = self._tkn.get_token_count(element["code"])
+            _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
+            print(_tkn_count)
             
         if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
-            _ret["code_writing"].append(self._header(element, element["code"]))
+            self.code_writer.append(self._header(element, element["definition"]["code"]))
         else:
-            self.fragmenter.config.chars_per_token = 0.9 * _tkn_count / len(element["code"])
-            frags = self.fragmenter.split_code(element)
+            self.fragmenter.config.chars_per_token = 0.9 * _tkn_count / len(element["definition"]["code"])
+            frags = self.fragmenter.split_code(element["definition"])
             
             for _idx, frag in enumerate(frags):
                 if _idx == 0:
-                    _ret["code_writing"].append(
+                    self.code_writer.append(
                         self._header(element, frag["code"], is_full=False)
                     )
                 else:
-                    _ret["code_writing"].append(
+                    self.code_writer.append(
                         self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
                     )
         
@@ -201,9 +218,10 @@ class ClassTransformer(DsTransformerBase):
         return name
 
 class DatasetTransformer():
-    def __init__(self, input_path, repo_name):
-        self.dstkn = DsTokenCounter()
-        self.ft = FunctionsTransformer(tkn = self.dstkn)
+    def __init__(self, input_path, repo_name, token_counter = None):
+        self.dstkn = token_counter
+        self.frag = CodeFragmenter()
+        self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag)
         self.cl = ClassTransformer(tkn = self.dstkn)
         self.input_file = os.path.join(input_path, f"dataset_clang_{repo_name}.jsonl")
         self.output_file_code_ft = os.path.join(input_path, f"dataset_code_finetune_{repo_name}.jsonl")
@@ -218,16 +236,16 @@ class DatasetTransformer():
             self.functions[name] = {"definition": None, "declaration": None, "def_cnt": 0, "decl_cnt": 0}
         if entry["is_defined"]:
             self.functions[name]["def_cnt"] += 1
-            if self.functions[name]["definition"] is not None:
-                print(f"func {name} \"definition\" is not None!\t{entry["location"]}:{entry["line"]}")
-            else:
+            if self.functions[name]["definition"] is None:
                 self.functions[name]["definition"] = entry
+            # else:
+                # print(f"func {name} \"definition\" is not None!\t{entry["location"]}:{entry["line"]}\t||\t{self.functions[name]["definition"]["name"]}\t{self.functions[name]["definition"]["location"]}:{self.functions[name]["definition"]["line"]}")
         else:
             self.functions[name]["decl_cnt"] += 1
-            if self.functions[name]["declaration"] is not None:
-                print(f"func {name} \"declaration\" is not None!\t{entry["location"]}:{entry["line"]}")
-            else:
+            if self.functions[name]["declaration"] is None:
                 self.functions[name]["declaration"] = entry
+            # else:
+                # print(f"func {name} \"declaration\" is not None!\t{entry["location"]}:{entry["line"]}\t||\t{self.functions[name]["declaration"]["name"]}\t{self.functions[name]["declaration"]["location"]}:{self.functions[name]["declaration"]["line"]}")
 
     def _extract_class(self, entry):
         name = self.cl.generate_full_name(entry)
@@ -236,7 +254,7 @@ class DatasetTransformer():
             self.classes[name] = {"definition": entry, "def_cnt": 1}
         else:
             self.classes[name]["def_cnt"] += 1
-            print(f"class {name} defiend Again!\t{entry["location"]}:{entry["line"]}")
+            # print(f"class {name} defiend Again!\t{entry["location"]}:{entry["line"]}\t||\t{self.classes[name]["definition"]["name"]}\t{self.classes[name]["definition"]["location"]}:{self.classes[name]["definition"]["line"]}")
 
     def prepare_lists(self):
         with open(self.input_file, "r", encoding="utf-8") as in_f:
@@ -246,17 +264,44 @@ class DatasetTransformer():
                     self._extract_function(entry)
                 elif entry['type'] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
                     self._extract_class(entry)
-        print(f"class count is {len(self.classes)}")
-        print(f"functions count is {len(self.functions)}")
 
     def review_lists(self):
-        print(f"class count is {len(self.classes)}")
+        _cls_multi_definition = 0
         for name, cls in self.classes.items():
-            print(f"{name} in {cls["definition"]["location"]}:{cls["definition"]["line"]}")
+            if cls["def_cnt"] > 1:
+                _cls_multi_definition += 1
+                print(f"multi defined\t{name} in {cls["definition"]["location"]}:{cls["definition"]["line"]}")
+        _undefined = 0
+        _multi_definition = 0
+        _multi_declaration = 0
         print(f"functions count is {len(self.functions)}")
         print("definition:declaration")
         for name, func in self.functions.items():
-            print(f"{func["definition"] is not None}:{func["declaration"] is not None}\t{name}")
+            if func["definition"] is None:
+                _undefined += 1
+                print(f"not defined\t{func["definition"] is not None}:{func["declaration"] is not None}\t{name}\t{func["declaration"]["location"]}:{func["declaration"]["line"]}")
+            elif func["def_cnt"] > 1:
+                _multi_definition += 1
+                print(f"multi defined\t{func["definition"] is not None}:{func["declaration"] is not None}\t{name}")
+            elif func["decl_cnt"] > 1:
+                _multi_declaration += 1
+                print(f"multi declared\t{func["definition"] is not None}:{func["declaration"] is not None}\t{name}")
+        print(f"class count is {len(self.classes)}\tclass multi definition count is {_cls_multi_definition}")
+        print(f"functions count is {len(self.functions)}\tnot defined: {_undefined}\tmulti deifned: {_multi_definition}\tmulti declared: {_multi_declaration}")
+
+    def parse_functions(self):
+        for name, func in self.functions.items():
+            self.ft.transform(func)
+        _lens = np.zeros((2, len(self.ft.code_writer)))
+        for _idx, el in enumerate(self.ft.code_writer):
+            _lens[0][_idx] = len(el["input"])
+            _lens[1][_idx] = len(el["output"])
+
+        print(len(self.ft.code_writer))
+        # for idx in range(10):
+        #     print(self.ft.code_writer[idx], "\n\n")
+        for i in range(2):
+            print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
 
 if __name__ == "__main__":
 
@@ -281,7 +326,7 @@ if __name__ == "__main__":
     
     element = {"id": "CONST_c6a4f8b73ee1", "type": "constructor", "name": "ApiUtil", "parent_id": "CLASS_a03bbf628416", "parent_type": "CLASS_DECL", "parent_name": "ApiUtil", "signature": {"name": "ApiUtil", "return_type": "void", "parameters": [], "qualifiers": {"is_const": False, "is_static": False, "is_virtual": False, "is_pure_virtual": False, "is_noexcept": False}}, "code": "ApiUtil();", "is_defined": "False", "location": "cppTango-9.3.7\\cppapi\\client\\ApiUtil.h", "line": 213, "is_template": False, "context_before": ["", "protected:", "/// @privatesection"], "context_after": ["ApiUtil();", "virtual ~ApiUtil();", ""], "comments": [], "docstrings": [{"type": "line", "text": "/// @privatesection\n", "line": 212}]}
 
-    # dstkn = DsTokenCounter()
+    dstkn = DsTokenCounter()
     # from code_fragmenter import get_code_element
     # from pathlib import Path
     # _code_element = get_code_element(_type="constructor", _name = "DeviceAttribute", _file = Path(f"C:\\work\\llm_test\\dataset_clang_cppTango-9.3.7.jsonl"))
@@ -295,6 +340,6 @@ if __name__ == "__main__":
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME)
+    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
-    # dt.review_lists()
+    dt.parse_functions()

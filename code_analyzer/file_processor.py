@@ -50,7 +50,7 @@ class FileProcessor(IFileProcessor):
         if skip_if and skip_if(str(file_path)):
             return None
         args = [
-            '-std=c++17',
+            '-std=c++14',
             '-x', 'c++',
             '-fparse-all-comments',
             '-D__clang__',
