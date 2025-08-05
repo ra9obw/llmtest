@@ -15,11 +15,48 @@ class FragmentConfig:
     preserve_comments: bool = True
     include_context: bool = True  # Включать ли контекстную информацию
 
+class CodeBaseConfig:
+    clang_path = r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll"
+    base_root =  r"C:\\work\\pavlenko\\llmtest-git\\codebase\\"
+    proj_name =  r"cppTango-9.3.7"
+    system_includes = [   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
+                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
+                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
+                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
+            ]
+    project_includes = [
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds\\fwd_ds',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cxxtest\\include\\cxxtest',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\new_tests',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client\\helpers',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\jpeg',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\win32\\resources',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango\\threading',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\tests',
+        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include',
+        'C:\\work\\pavlenko\\omniorb-4.3.0_x64-msvc15_py37\\include',
+        'C:\\work\\pavlenko\\zmq-4.0.5-2_x64-msvc15\\include'
+            ]
+    compile_flags = [
+            '-std=c++14',
+            '-x', 'c++',
+            '-fparse-all-comments',
+            '-D__clang__',
+            '-fno-delayed-template-parsing',
+        ]
+
 class BaseFragmenter:
-    def __init__(self, config: FragmentConfig):
+    def __init__(self, config: FragmentConfig, code_config: CodeBaseConfig):
         self.config = config
-        CLANG_PATH = r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll"
-        Config.set_library_file(CLANG_PATH)
+        self.code_config = code_config
+        self.index_cache = None
+        self.index_cached_file = None
 
     def show_diagnostic(self, translation_unit):
         if translation_unit and translation_unit.diagnostics:
@@ -42,9 +79,26 @@ class BaseFragmenter:
                 column = location.column
                 # print(f"[{severity_name}] {file}:{line}:{column} - {message}")
 
+    def get_compile_args(self):
+        args = self.code_config.compile_flags
+        args.extend(arg for include_dir in self.code_config.system_includes 
+                   for arg in ['-I', include_dir])
+        if self.code_config.project_includes != None:
+            args.extend(arg for include_dir in self.code_config.project_includes 
+                   for arg in ['-I', include_dir])
+        return args
+
     def parse_code(self, code: str) -> TranslationUnit:
-        index = Index.create()
-        return index.parse('tmp.cpp', args=['-std=c++17'], unsaved_files=[('tmp.cpp', code)])
+        file_path = self.code_config.base_root + self.code_config.proj_name + "\\" + code["location"]
+        if self.index_cached_file and self.index_cached_file == file_path and self.index_cache:
+            return self.index_cache
+        else:
+            index = Index.create()
+            args = self.get_compile_args()
+            self.index_cache = index.parse(file_path, args=args, options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+            self.show_diagnostic(self.index_cache)
+            self.index_cached_file = file_path
+            return self.index_cache
     
     def get_split_points(self, cursor, code: str) -> List[int]:
         """Нахождение точек разбиения в AST"""
@@ -128,10 +182,7 @@ class BaseFragmenter:
          
     def split(self, code_data: Dict) -> List[Dict]:
         """Основной метод разбиения кода класса"""
-        code = code_data['code']
-        tu = self.parse_code(code)
-        self.show_diagnostic(tu)
-        
+        tu = self.parse_code(code_data)        
         # Получаем курсор для всего класса
         class_cursor = None
         for cursor in tu.cursor.get_children():
@@ -141,6 +192,7 @@ class BaseFragmenter:
         
         # if not class_cursor:
             # raise ValueError("Class cursor not found in AST")
+        code = code_data["code"]
         if class_cursor:
             split_points = self.get_split_points(class_cursor, code)
         else: 
@@ -167,8 +219,8 @@ class BaseFragmenter:
         return result
 
 class ClassFragmenter(BaseFragmenter):
-    def __init__(self, config: FragmentConfig):
-        super().__init__(config)
+    def __init__(self, config: FragmentConfig, codebase_conf: CodeBaseConfig):
+        super().__init__(config, codebase_conf)
         self._cursor_kinds = {
             CursorKind.CONSTRUCTOR,
             CursorKind.DESTRUCTOR,
@@ -189,8 +241,8 @@ class ClassFragmenter(BaseFragmenter):
         }
             
 class MethodFragmenter(BaseFragmenter):
-    def __init__(self, config: FragmentConfig):
-        super().__init__(config)
+    def __init__(self, config: FragmentConfig, codebase_conf: CodeBaseConfig):
+        super().__init__(config, codebase_conf)
         self._cursor_kinds = {
             CursorKind.IF_STMT,
             CursorKind.SWITCH_STMT,
@@ -209,8 +261,8 @@ class MethodFragmenter(BaseFragmenter):
         }
 
 class ShowCursors(BaseFragmenter):
-    def __init__(self, config: FragmentConfig):
-        super().__init__(config)
+    def __init__(self, config: FragmentConfig, codebase_conf: CodeBaseConfig):
+        super().__init__(config, codebase_conf)
         self._cursor_kinds = { }
 
     def split(self, code_data: Dict) -> List[Dict]:
@@ -238,8 +290,8 @@ class ShowCursors(BaseFragmenter):
         visit(cursor, 0)
 
 class VarFragmenter(BaseFragmenter):
-    def __init__(self, config: FragmentConfig):
-        super().__init__(config)
+    def __init__(self, config: FragmentConfig, codebase_conf: CodeBaseConfig):
+        super().__init__(config, codebase_conf)
         self._cursor_kinds = { }
     
     def get_split_points(self, cursor, code: str) -> List[int]:
@@ -284,18 +336,23 @@ class VarFragmenter(BaseFragmenter):
 
 
 class CodeFragmenter:
-    def __init__(self, config: Optional[FragmentConfig] = None):
+    def __init__(self, config: Optional[FragmentConfig] = None, codebase_conf: Optional[CodeBaseConfig] = None):
         self.config = config or FragmentConfig()
+        self.codebase_conf = codebase_conf or CodeBaseConfig()
+        # CLANG_PATH = r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll"
+        # CLANG_PATH = r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll"
+        print(self.codebase_conf.clang_path)
+        Config.set_library_file(self.codebase_conf.clang_path)
         self._fragmenters = {
-            "class_decl": ClassFragmenter(self.config),
-            "struct_decl": ClassFragmenter(self.config),
-            "function_decl": MethodFragmenter(self.config),
-            "constructor": MethodFragmenter(self.config),
-            "destructor": MethodFragmenter(self.config),
-            "cxx_method": MethodFragmenter(self.config),
-            "class_template": ClassFragmenter(self.config),
-            "function_template": MethodFragmenter(self.config),
-            "var_decl": VarFragmenter(self.config)
+            "class_decl": ClassFragmenter(self.config, self.codebase_conf),
+            "struct_decl": ClassFragmenter(self.config, self.codebase_conf),
+            "function_decl": MethodFragmenter(self.config, self.codebase_conf),
+            "constructor": MethodFragmenter(self.config, self.codebase_conf),
+            "destructor": MethodFragmenter(self.config, self.codebase_conf),
+            "cxx_method": MethodFragmenter(self.config, self.codebase_conf),
+            "class_template": ClassFragmenter(self.config, self.codebase_conf),
+            "function_template": MethodFragmenter(self.config, self.codebase_conf),
+            "var_decl": VarFragmenter(self.config, self.codebase_conf)
         }
         
     def split_code(self, code_data: Dict) -> List[Dict]:
@@ -618,7 +675,7 @@ if __name__ == "__main__":
 
     # _code_element = get_code_element(_type="structures", _name = "TimeStampComponent")
     # _code_element = get_code_element(_type="class_templates", _name = "TimedAttrData")
-    _code_element = get_code_element(_type="constructor", _name = "DeviceAttribute")
+    _code_element = get_code_element(_type="cxx_method", _name = "set_max_warning")
     # _code_element = get_code_element(_type="function_template", _name = "operator>>")
     # _code_element = get_code_element(_type="class_template", _name = "DataElement")
     # _code_element = get_code_element(_type="var_decl", _name = "val_ac_luminance")
@@ -632,7 +689,8 @@ if __name__ == "__main__":
         chars_per_token=3.333,  # Для C++ обычно 3.0-3.5
         min_overlap=30
     )
-    fragmenter = CodeFragmenter(config)
+    code_config = CodeBaseConfig()
+    fragmenter = CodeFragmenter(config, code_config)
     fragments = fragmenter.split_code(_code_element)
     fragmenter.evaluate_fragmentation(fragments, _code_element)
 

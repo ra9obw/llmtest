@@ -135,7 +135,7 @@ class RangeLocator(IRangeLocator):
             
         return None
     
-    def get_previous_cursor_position(self, cursor: Cursor, verbose) -> Optional[Dict]:
+    def get_previous_cursor_position(self, cursor: Cursor) -> Optional[Dict]:
         """Get the position of the previous cursor at the same or higher level before the current one."""
         siblings = self.get_sibling_and_parent_positions(cursor)
         if not siblings:

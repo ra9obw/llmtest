@@ -82,10 +82,7 @@ class CodeExtractor:
         start_line = cursor.location.line
         
         # Get the previous significant cursor position to determine search range
-        _verbose = False
-        if "command.h" in cursor.location.file.name and start_line == 2587:
-            _verbose = True
-        prev_cursor_pos = self.range_locator.get_previous_cursor_position(cursor, _verbose)
+        prev_cursor_pos = self.range_locator.get_previous_cursor_position(cursor)
         
         if not prev_cursor_pos:
             search_start = 1  # Start from beginning of file if no previous cursor
@@ -515,7 +512,7 @@ def main() -> None:
 
     # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
     # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
-    _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
+    _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
     
     try:
         extractor.process_file(_path)

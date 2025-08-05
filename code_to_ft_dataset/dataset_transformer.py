@@ -432,7 +432,8 @@ if __name__ == "__main__":
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
     dt.parse_functions()
     dt.save_data()
