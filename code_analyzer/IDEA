@@ -62,43 +62,6 @@ typedef struct _AttributeInfo : public DeviceAttributeConfig
 
 * Generic INItialization configuration []
 
-
-settings = {
-    "CLANG_PATH":   r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll",
-    "BASE_ROOT":    r"C:\\work\\pavlenko\\llmtest-git",
-    "PROJ_NAME":    r"simple",
-    "SYSTEM_INCLUDES" : [   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
-            ],
-    "PROJECT_INCLUDES": [
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds\\fwd_ds',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cxxtest\\include\\cxxtest',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\new_tests',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client\\helpers',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\jpeg',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\win32\\resources',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango\\threading',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\tests',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include',
-        'C:\\work\\pavlenko\\omniorb-4.3.0_x64-msvc15_py37\\include',
-        'C:\\work\\pavlenko\\zmq-4.0.5-2_x64-msvc15\\include'
-            ]
-}
-
-
-
-
-
-
-
 А еще в случае конструкторов/дестркуторов - шаблонные они, не шаблонные, да вообще пофиг,
 тип курсора у них общий... Корректно это у меня обрабатывается или нет?
 

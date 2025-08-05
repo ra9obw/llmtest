@@ -15,33 +15,70 @@ class FragmentConfig:
     preserve_comments: bool = True
     include_context: bool = True  # Включать ли контекстную информацию
 
+# class CodeBaseConfig:
+#     clang_path = r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll"
+#     base_root =  r"C:\\work\\pavlenko\\llmtest-git\\codebase\\"
+#     proj_name =  r"cppTango-9.3.7"
+#     system_includes = [   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
+#                             'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
+#                             'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
+#                             'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
+#             ]
+#     project_includes = [
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds\\fwd_ds',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cxxtest\\include\\cxxtest',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\new_tests',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client\\helpers',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\jpeg',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\win32\\resources',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango\\threading',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\tests',
+#         'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include',
+#         'C:\\work\\pavlenko\\omniorb-4.3.0_x64-msvc15_py37\\include',
+#         'C:\\work\\pavlenko\\zmq-4.0.5-2_x64-msvc15\\include'
+#             ]
+#     compile_flags = [
+#             '-std=c++14',
+#             '-x', 'c++',
+#             '-fparse-all-comments',
+#             '-D__clang__',
+#             '-fno-delayed-template-parsing',
+#         ]
+
 class CodeBaseConfig:
-    clang_path = r"C:\\work\\pavlenko\\clang-llvm-windows-msvc-20-1-5\\bin\\libclang.dll"
-    base_root =  r"C:\\work\\pavlenko\\llmtest-git\\codebase\\"
+    clang_path = r"C:\\work\\clang-llvm-20.1.7-windows-msvc\\clang\\bin\\libclang.dll"
+    base_root =  r"C:\\work\\llm_test\\codebase\\"
     proj_name =  r"cppTango-9.3.7"
-    system_includes = [   'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
-                            'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
+    system_includes = [   
+        'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\14.44.35207\\include',
+        'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\ucrt',
+        'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\shared',
+        'C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.22621.0\\um'
             ]
     project_includes = [
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds\\fwd_ds',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cxxtest\\include\\cxxtest',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\new_tests',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client\\helpers',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\jpeg',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\win32\\resources',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango\\threading',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\tests',
-        'C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include',
-        'C:\\work\\pavlenko\\omniorb-4.3.0_x64-msvc15_py37\\include',
-        'C:\\work\\pavlenko\\zmq-4.0.5-2_x64-msvc15\\include'
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cpp_test_ds\\fwd_ds',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\cxxtest\\include\\cxxtest',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cpp_test_suite\\new_tests',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\client\\helpers',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\jpeg',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\win32\\resources',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include\\log4tango\\threading',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\tests',
+        'C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\include',
+        'C:\\work\\llm_test\\codebase\\omniorb-4.3.3_x64-msvc15_py37\\include',
+        'C:\\work\\llm_test\\codebase\\zmq-4.0.5-2_x64-msvc15\\include'
             ]
     compile_flags = [
             '-std=c++14',

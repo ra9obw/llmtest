@@ -21,6 +21,10 @@ class IElementTracker(ABC):
     @abstractmethod
     def generate_element_id(self, cursor: Cursor) -> str:
         pass
+    
+    @abstractmethod
+    def generate_short_id(self, cursor: Cursor) -> str:
+        pass
 
     @abstractmethod
     def track_unhandled_kind(self, cursor: Cursor) -> None:

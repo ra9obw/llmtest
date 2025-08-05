@@ -63,10 +63,18 @@ class ElementTracker(IElementTracker):
                 _unique_str = f"{_kind}-{_file_path}-{cursor.location.line}-{cursor.location.column}-{_name}"
         else:
             _unique_str = f"{_name}"
-
+        # return _unique_str
         _hash_part = hashlib.sha256(_unique_str.encode()).hexdigest()[:12]  # первые 8 символов = 32 бита
         _id = f"{_kind[:5]}_{_hash_part}"  # например: "CLA_a1b2c3d4"
         return _id
+
+    def generate_short_id(self, cursor: Cursor) -> str:
+        return self.generate_element_id(cursor)
+        # full_id = self.generate_element_id(cursor)
+        # _hash_part = hashlib.sha256(full_id.encode()).hexdigest()[:12]  # первые 8 символов = 32 бита
+        # _kind = cursor.kind.name
+        # _id = f"{_kind[:5]}_{_hash_part}"  # например: "CLA_a1b2c3d4"
+        # return _id
 
     def is_processed(self, element_id: str) -> bool:
         """Check if element was already processed."""

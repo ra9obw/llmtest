@@ -267,9 +267,27 @@ class FunctionsTransformer(DsTransformerBase):
     
 
 class ClassTransformer(DsTransformerBase):
+    """Transformer for class/struct elements that only have definitions."""
+    
+    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None, fragmenter: Optional[CodeFragmenter] = None):
+        super().__init__(max_tokens, tkn, fragmenter)
+        self.code_writer = []
+        self.documenter = []
+    
+    def _do_fullcode_instruction(self, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.FULL)
+    
+    def _do_fragcode_header(self, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.FIRST_FRAGMENT)
 
-    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None):
-        super().__init__(max_tokens, tkn)
+    def _do_fragcode_body(self, idx: str, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.NEXT_FRAGMENT, idx)
+
+    def _do_fragcode_tail(self, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.LAST_FRAGMENT)    
+
+    def _do_docsting_instruction(self, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.DOCSTRING)
 
     def generate_full_name(self, element):
         name = element["type"] + "_" + element["name"]
@@ -277,15 +295,93 @@ class ClassTransformer(DsTransformerBase):
             name = element["parent_type"] + "_" + element["parent_name"] + "_" + name
         return name
 
+    def _get_docstring(self, element):
+        if element["definition"]["docstrings"]:
+            return self.clean_docstring('\n'.join([doc['text'] for doc in element["definition"]['docstrings']]))
+        return None
+
+    def _add_doc_and_comment(self, element):
+        parts = []
+        _doc = self._get_docstring(element)
+        if _doc: 
+            parts.append(f" using docstring {_doc}")
+        if element["definition"]["comments"]:
+            _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
+            parts.append(f" using comments {_comm}")
+        return parts
+
+    def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
+        """Generate header part of the transformed class code."""
+        _instruction = (self._do_fullcode_instruction(element) if is_full 
+                       else self._do_fragcode_header(element))
+        parts = [
+            _instruction,
+            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
+        ]
+        
+        if element["definition"]["context_before"]:
+            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
+
+        parts += self._add_doc_and_comment(element)
+
+        return {"output": code_snippet, "input": "".join(parts)}
+    
+    def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
+        """Generate body part of the transformed class code."""
+        _instruction = (self._do_fragcode_tail(element) if is_end 
+                       else self._do_fragcode_body(str(frag), element))
+        parts = [
+            _instruction,
+            f" located at file {element["definition"]['location']}"
+        ]
+        
+        parts += self._add_doc_and_comment(element)            
+        return {"input": "".join(parts), "output": code_snippet}
+    
+    def _docstring_generate(self, element: Dict):
+        _doc = self._get_docstring(element)
+        if _doc:
+            _inst = self._do_docsting_instruction(element)
+            _code = element["definition"]["code"]
+            _inst += f" with code: {_code}"
+            self.documenter.append({"output": _doc, "input": _inst})
+
+    def _class_transform(self, element: Dict):
+        """Transform a single class element."""
+        if element["def_cnt"] > 1:
+            return
+            
+        element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
+        self._docstring_generate(element)
+        
+        if self._tkn and self.fragmenter:
+            _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
+            
+        if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
+            self.code_writer.append(self._header(element, element["definition"]["code"]))
+        else:
+            self.fragmenter.config.chars_per_token = 0.8 * len(element["definition"]["code"]) / _tkn_count 
+            frags = self.fragmenter.split_code(element["definition"])
+            
+            for _idx, frag in enumerate(frags):
+                if _idx == 0:
+                    self.code_writer.append(
+                        self._header(element, frag["code"], is_full=False)
+                    )
+                else:
+                    self.code_writer.append(
+                        self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
+                    )
+    
     def transform(self, element: Dict) -> Dict:
-        print(element["definition"]["name"])
+        self._class_transform(element)
 
 class DatasetTransformer():
     def __init__(self, input_path, repo_name, token_counter: Optional[DsTokenCounter] = None):
         self.dstkn = token_counter
         self.frag = CodeFragmenter()
         self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag)
-        self.cl = ClassTransformer(tkn = self.dstkn)
+        self.cl = ClassTransformer(tkn = self.dstkn, fragmenter=self.frag)
         self.input_file = os.path.join(input_path, f"dataset_clang_{repo_name}.jsonl")
         self.output_file_code_ft = os.path.join(input_path, f"dataset_code_finetune_{repo_name}.jsonl")
         self.output_file_doc_ft = os.path.join(input_path, f"dataset_doc_finetune_{repo_name}.jsonl")
@@ -327,6 +423,36 @@ class DatasetTransformer():
                     self._extract_function(entry)
                 elif entry['type'] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
                     self._extract_class(entry)
+
+    def parse_functions(self):
+        for name, func in self.functions.items():
+            self.ft.transform(func)
+
+        print(f" self.ft.code_writer is {len(self.ft.code_writer)}")
+        self._stat_subprocess(self.ft.code_writer)
+
+        print(f" self.ft.documenter length is {len(self.ft.documenter)}")
+        self._stat_subprocess(self.ft.documenter)
+
+    def parse_class(self):
+        for name, cls in self.classes.items():
+            self.cl.transform(cls)
+        
+        print(f" self.cl.code_writer is {len(self.cl.code_writer)}")
+        self._stat_subprocess(self.cl.code_writer)
+
+        print(f" self.cl.documenter length is {len(self.cl.documenter)}")
+        self._stat_subprocess(self.cl.documenter)
+        
+    def save_data(self):
+        with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
+            for element in self.ft.code_writer:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
+        with open(self.output_file_doc_ft, "w", encoding="utf-8") as f:
+            for element in self.ft.documenter:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
 
     def review_lists(self):
         _cls_multi_definition = 0
@@ -398,32 +524,9 @@ class DatasetTransformer():
         # print(f"min output is {dataset[min_idx]}")
         # print(f"max output is {dataset[max_idx]}")
 
-        # self.plot_single_histograms("input", _lens[0])
-        # self.plot_single_histograms("output", _lens[1])
+        self.plot_single_histograms("input", _lens[0])
+        self.plot_single_histograms("output", _lens[1])
 
-    def parse_functions(self):
-        for name, func in self.functions.items():
-            self.ft.transform(func)
-
-        print(f" self.ft.code_writer is {len(self.ft.code_writer)}")
-        self._stat_subprocess(self.ft.code_writer)
-
-        print(f" self.ft.documenter length is {len(self.ft.documenter)}")
-        self._stat_subprocess(self.ft.documenter)
-
-    def parse_class(self):
-        for name, cls in self.classes.items():
-            self.cl.transform(cls)
-
-    def save_data(self):
-        with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
-            for element in self.ft.code_writer:
-                json_line = json.dumps(element, ensure_ascii=False)
-                f.write(json_line + "\n")
-        with open(self.output_file_doc_ft, "w", encoding="utf-8") as f:
-            for element in self.ft.documenter:
-                json_line = json.dumps(element, ensure_ascii=False)
-                f.write(json_line + "\n")
 
 if __name__ == "__main__":
 
@@ -462,9 +565,9 @@ if __name__ == "__main__":
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
-    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
+    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    # dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
-    dt.parse_functions()
+    # dt.parse_functions()
     dt.parse_class()
-    dt.save_data()
+    # dt.save_data()

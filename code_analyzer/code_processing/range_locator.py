@@ -148,8 +148,6 @@ class RangeLocator(IRangeLocator):
         
         if current_index == -1:
             return None
-        if verbose:
-            print(self._file_positions_cache[cursor.location.file.name])    
         # Ищем предыдущие позиции с уровнем <= текущему
         for i in range(current_index - 1, -1, -1):
             if siblings[i]["level"] <= siblings[current_index]["level"]:

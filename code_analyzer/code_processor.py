@@ -150,7 +150,7 @@ class CodeExtractor:
         if not parent:
             return None, None, None
         
-        parent_id = self.element_tracker.generate_element_id(parent)
+        parent_id = self.element_tracker.generate_short_id(parent)
         parent_type = parent.kind.name.lower()
         parent_name = parent.spelling or "(anonymous)"
         
@@ -161,7 +161,7 @@ class CodeExtractor:
         context = self.range_locator.get_context(cursor)
         comments = self._get_comments_before_cursor(cursor)
         return {
-            "id": self.element_tracker.generate_element_id(cursor),
+            "id": self.element_tracker.generate_short_id(cursor),
             "type": cursor.kind.name.lower(),
             "name": self.element_tracker.generate_name(cursor),
             "location": self.file_processor.get_relative_path(cursor.location.file.name),
@@ -501,7 +501,7 @@ def main() -> None:
     # for root, _, files in os.walk(REPO_PATH):
     #     for file in files:
     #         # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
-    #         if file.endswith((".cpp", ".cc", ".cxx")):
+    #         if file.endswith((".cpp", ".cc", ".cxx", ".c")):
     #             file_path = Path(root) / file
     #             print(f"Processing: {file_path}")
     #             try:
@@ -511,8 +511,8 @@ def main() -> None:
     #                 traceback.print_exc()
 
     # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
-    # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
-    _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
+    _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+    # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
     
     try:
         extractor.process_file(_path)

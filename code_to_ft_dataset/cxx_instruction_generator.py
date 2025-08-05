@@ -149,7 +149,7 @@ def create_instruction_generator(element):
             return CxxMethodTransformer(element)
         else:
             return FunctionTransformer(element)
-    elif element["parent_type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
+    elif element["type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
         return ClassTransformer(element)
     else:
         raise NotImplementedError(f"Instruction generator for {element['type']} not implemented!")
