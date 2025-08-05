@@ -5,6 +5,7 @@ class GenerationMode(Enum):
     FIRST_FRAGMENT = auto()
     NEXT_FRAGMENT = auto()
     LAST_FRAGMENT = auto()
+    DOCSTRING = auto()
 
 class CppInstructionGenerator:
     def __init__(self, element):
@@ -22,6 +23,9 @@ class CppInstructionGenerator:
 
     def _gen_last_fragment(self):
         raise NotImplementedError()
+        
+    def _gen_docstring(self):
+        raise NotImplementedError()
 
     def generate(self, mode: GenerationMode, idx="0"):
         if mode == GenerationMode.FULL:
@@ -30,6 +34,8 @@ class CppInstructionGenerator:
             return self._gen_first_fragment()
         elif mode == GenerationMode.LAST_FRAGMENT:
             return self._gen_last_fragment()
+        elif mode == GenerationMode.DOCSTRING:
+            return self._gen_docstring()
         else:
             return self._gen_next_fragment(idx)
 
@@ -48,7 +54,9 @@ class FunctionTransformer(CppInstructionGenerator):
 
     def _gen_last_fragment(self):
         return f"Implement the last fragment of the C++ function {self.element_name}"
-    
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the C++ function {self.element_name}"
 
 class ConstructorTransformer(CppInstructionGenerator):
     def __init__(self, element):
@@ -65,7 +73,9 @@ class ConstructorTransformer(CppInstructionGenerator):
 
     def _gen_last_fragment(self):
         return f"Implement the last fragment of the constructor of the C++ class {self.parent_name}"
-    
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the constructor of the C++ class {self.parent_name}"
 
 class DestructorTransformer(CppInstructionGenerator):
     def __init__(self, element):
@@ -82,7 +92,9 @@ class DestructorTransformer(CppInstructionGenerator):
 
     def _gen_last_fragment(self):
         return f"Implement the last fragment of the destructor of the C++ class {self.parent_name}"
-    
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the destructor of the C++ class {self.parent_name}"
 
 class CxxMethodTransformer(CppInstructionGenerator):
     def __init__(self, element):
@@ -99,6 +111,9 @@ class CxxMethodTransformer(CppInstructionGenerator):
 
     def _gen_last_fragment(self):
         return f"Implement the last fragment of the method {self.element_name} of the C++ class {self.parent_name}"
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the method {self.element_name} of the C++ class {self.parent_name}"
 
 
 def create_instruction_generator(element):
@@ -116,7 +131,7 @@ def create_instruction_generator(element):
         else:
             return FunctionTransformer(element)
     else:
-        raise NotImplementedError(f"Instruction generator for {element["type"]} not implemented!")
+        raise NotImplementedError(f"Instruction generator for {element['type']} not implemented!")
     
 
 def generate_instruction(element, mode: GenerationMode, idx=0):

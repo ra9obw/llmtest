@@ -140,6 +140,9 @@ class FunctionsTransformer(DsTransformerBase):
     def _do_fragcode_tail(self, element: Dict) -> str:
         return generate_instruction(element["definition"], GenerationMode.LAST_FRAGMENT)    
 
+    def _do_docsting_instruction(self, element: Dict) -> str:
+        return generate_instruction(element["definition"], GenerationMode.DOCSTRING)
+
     def _get_parameters(self, signature):
         parameters = []
         for param in signature["parameters"]:
@@ -165,15 +168,19 @@ class FunctionsTransformer(DsTransformerBase):
             _name += '_'.join(parameters)
         return _name
     
-    def _add_doc_and_comment(self, element):
-        parts = []
+    def _get_docstring(self, element):
+        _doc = None
         if element["definition"]["docstrings"]:
             _doc = self.clean_docstring('\n'.join([doc['text'] for doc in element["definition"]['docstrings']]))
-            parts.append(f" using docstring {_doc}")
         else:
             if element["declaration"] and element["declaration"]["docstrings"]:
                 _doc = self.clean_docstring('\n'.join([doc['text'] for doc in element["declaration"]['docstrings']]))
-                parts.append(f" using docstring {_doc}")
+        return _doc
+
+    def _add_doc_and_comment(self, element):
+        parts = []
+        _doc = self._get_docstring(element)
+        if _doc: parts.append(f" using docstring {_doc}")
         if element["definition"]["comments"]:
             _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
             parts.append(f" using comments {_comm}")
@@ -213,20 +220,27 @@ class FunctionsTransformer(DsTransformerBase):
         parts += self._add_doc_and_comment(element)            
         return {"input": "".join(parts), "output": code_snippet}
     
+    def _docstring_generate(self, element: Dict):
+        _doc = self._get_docstring(element)
+        if _doc:
+            _inst = self._do_docsting_instruction(element)
+            _code = element["definition"]["code"]
+            _inst += f" with code: {_code}"
+            self.documenter.append({"output": _doc, "input": _inst})
+
+
     def _restore_cpp_function(self, element: Dict) -> str:
         if element["declaration"] is not None:
             return element["declaration"]["code"]
         else:    
             return generate_signature(element["definition"])
 
-
     def _func_transform(self, element: Dict):
         """Transform a single function element."""
-        _ret = {"code_writing": [], "doc_generation": []}
-
         if (element["definition"] is None) or (element["def_cnt"] > 1) or (element["decl_cnt"] > 1):
             return
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
+        self._docstring_generate(element)
         if self._tkn and self.fragmenter:
             _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
             # print(_tkn_count)
@@ -247,11 +261,9 @@ class FunctionsTransformer(DsTransformerBase):
                     self.code_writer.append(
                         self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
                     )
-        
-        return _ret
     
     def transform(self, element: Dict) -> Dict:
-        return self._func_transform(element)
+        self._func_transform(element)
     
 
 class ClassTransformer(DsTransformerBase):
@@ -362,36 +374,47 @@ class DatasetTransformer():
         plt.tight_layout()
         plt.show()
 
-    def parse_functions(self):
-        for name, func in self.functions.items():
-            self.ft.transform(func)
-        _lens = np.zeros((2, len(self.ft.code_writer)))
-        for _idx, el in enumerate(self.ft.code_writer):
+    def _stat_subprocess(self, dataset):
+        _lens = np.zeros((2, len(dataset)))
+        for _idx, el in enumerate(dataset):
             _lens[0][_idx] = self.dstkn.get_token_count(el["input"])
             _lens[1][_idx] = self.dstkn.get_token_count(el["output"])
 
-        print(len(self.ft.code_writer))
         # for idx in range(10):
-        #     print(self.ft.code_writer[idx], "\n\n")
+        #     print(dataset[idx], "\n\n")
         for i in range(2):
             print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
         
         min_idx = _lens[0].argmin()
         max_idx = _lens[0].argmax()
-        print(f"min input is {self.ft.code_writer[min_idx]}")
-        print(f"max input is {self.ft.code_writer[max_idx]}")
+        print(f"min input is {dataset[min_idx]}")
+        print(f"max input is {dataset[max_idx]}")
 
         min_idx = _lens[1].argmin()
         max_idx = _lens[1].argmax()
-        print(f"min output is {self.ft.code_writer[min_idx]}")
-        print(f"max output is {self.ft.code_writer[max_idx]}")
+        print(f"min output is {dataset[min_idx]}")
+        print(f"max output is {dataset[max_idx]}")
 
         self.plot_single_histograms("input", _lens[0])
         self.plot_single_histograms("output", _lens[1])
 
+    def parse_functions(self):
+        for name, func in self.functions.items():
+            self.ft.transform(func)
+
+        print(f" self.ft.code_writer is {len(self.ft.code_writer)}")
+        self._stat_subprocess(self.ft.code_writer)
+
+        print(f" self.ft.documenter length is {len(self.ft.documenter)}")
+        self._stat_subprocess(self.ft.documenter)
+
     def save_data(self):
         with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
             for element in self.ft.code_writer:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
+        with open(self.output_file_doc_ft, "w", encoding="utf-8") as f:
+            for element in self.ft.documenter:
                 json_line = json.dumps(element, ensure_ascii=False)
                 f.write(json_line + "\n")
 
