@@ -277,6 +277,9 @@ class ClassTransformer(DsTransformerBase):
             name = element["parent_type"] + "_" + element["parent_name"] + "_" + name
         return name
 
+    def transform(self, element: Dict) -> Dict:
+        print(element["definition"]["name"])
+
 class DatasetTransformer():
     def __init__(self, input_path, repo_name, token_counter: Optional[DsTokenCounter] = None):
         self.dstkn = token_counter
@@ -385,18 +388,18 @@ class DatasetTransformer():
         for i in range(2):
             print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
         
-        min_idx = _lens[0].argmin()
-        max_idx = _lens[0].argmax()
-        print(f"min input is {dataset[min_idx]}")
-        print(f"max input is {dataset[max_idx]}")
+        # min_idx = _lens[0].argmin()
+        # max_idx = _lens[0].argmax()
+        # print(f"min input is {dataset[min_idx]}")
+        # print(f"max input is {dataset[max_idx]}")
 
-        min_idx = _lens[1].argmin()
-        max_idx = _lens[1].argmax()
-        print(f"min output is {dataset[min_idx]}")
-        print(f"max output is {dataset[max_idx]}")
+        # min_idx = _lens[1].argmin()
+        # max_idx = _lens[1].argmax()
+        # print(f"min output is {dataset[min_idx]}")
+        # print(f"max output is {dataset[max_idx]}")
 
-        self.plot_single_histograms("input", _lens[0])
-        self.plot_single_histograms("output", _lens[1])
+        # self.plot_single_histograms("input", _lens[0])
+        # self.plot_single_histograms("output", _lens[1])
 
     def parse_functions(self):
         for name, func in self.functions.items():
@@ -407,6 +410,10 @@ class DatasetTransformer():
 
         print(f" self.ft.documenter length is {len(self.ft.documenter)}")
         self._stat_subprocess(self.ft.documenter)
+
+    def parse_class(self):
+        for name, cls in self.classes.items():
+            self.cl.transform(cls)
 
     def save_data(self):
         with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
@@ -459,4 +466,5 @@ if __name__ == "__main__":
     dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
     dt.parse_functions()
+    dt.parse_class()
     dt.save_data()

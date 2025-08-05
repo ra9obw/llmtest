@@ -58,6 +58,25 @@ class FunctionTransformer(CppInstructionGenerator):
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the C++ function {self.element_name}"
 
+class ClassTransformer(CppInstructionGenerator):
+    def __init__(self, element):
+        super().__init__(element)
+    
+    def _gen_full_instruction(self):
+        return f"Implement the C++ class {self.element_name}"
+    
+    def _gen_first_fragment(self):
+        return f"Implement the first fragment of the C++ class {self.element_name}"
+
+    def _gen_next_fragment(self, idx):
+        return f"Implement fragment (#{idx}) of the C++ class {self.element_name}"
+
+    def _gen_last_fragment(self):
+        return f"Implement the last fragment of the C++ class {self.element_name}"
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the C++ class {self.element_name}"
+
 class ConstructorTransformer(CppInstructionGenerator):
     def __init__(self, element):
         super().__init__(element)
@@ -130,6 +149,8 @@ def create_instruction_generator(element):
             return CxxMethodTransformer(element)
         else:
             return FunctionTransformer(element)
+    elif element["parent_type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
+        return ClassTransformer(element)
     else:
         raise NotImplementedError(f"Instruction generator for {element['type']} not implemented!")
     
