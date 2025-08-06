@@ -35,7 +35,7 @@ class DsTokenCounter:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         except Exception as e:
             raise ValueError(f"Failed to initialize tokenizer: {str(e)}")
-    
+
     def get_token_count(self, in_str: str) -> int:
         """Get token count for a single string."""
         _input_tokens_no_trunc = self.tokenizer(in_str, truncation=False)
@@ -54,7 +54,8 @@ class DsTransformerBase:
         self, 
         max_tokens: int = 512, 
         tkn: Optional[DsTokenCounter] = None, 
-        fragmenter: Optional[CodeFragmenter] = None
+        fragmenter: Optional[CodeFragmenter] = None,
+        deration: float = 0.75
     ):
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
@@ -63,6 +64,9 @@ class DsTransformerBase:
         self.fragmenter = fragmenter
         self.code_writer = []
         self.documenter = []
+        self.too_long_inpust = 0
+        self.input_part_order = ['instruction', 'location', 'context_before', 'comments', 'docstring']
+        self.removal_priority = ['comments', 'context_before', 'location']
 
     def clean_docstring(self, docstring):
         # Удаляем начальные /* и */
@@ -116,18 +120,7 @@ class DsTransformerBase:
         code = re.sub(r'([<>{}\[(::*&]) ', r'\1', code)
         code = '\n'.join(line.strip() for line in code.split('\n') if line.strip())
         return code
-    
-    def transform(self, element: Dict) -> Dict:
-        """Transform the input element."""
-        raise NotImplementedError
-
-
-class FunctionsTransformer(DsTransformerBase):
-    """Generic code transformer that can handle different element types."""
-    
-    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None, fragmenter: Optional[CodeFragmenter] = None):
-        super().__init__(max_tokens, tkn, fragmenter)
-    
+        
     def _do_fullcode_instruction(self, element: Dict) -> str:
         return generate_instruction(element["definition"], GenerationMode.FULL)
     
@@ -142,6 +135,133 @@ class FunctionsTransformer(DsTransformerBase):
 
     def _do_docsting_instruction(self, element: Dict) -> str:
         return generate_instruction(element["definition"], GenerationMode.DOCSTRING)
+    
+    def generate_full_name(self, element):
+        pass
+    
+    def _get_docstring(self, element):
+        if element["definition"]["docstrings"]:
+            return self.clean_docstring('\n'.join([doc['text'] for doc in element["definition"]['docstrings']]))
+        return None
+
+    def _add_doc_and_comment(self, element):
+        parts = []
+        _doc = self._get_docstring(element)
+        if _doc: 
+            parts.append(f" using docstring {_doc}")
+        if element["definition"]["comments"]:
+            _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
+            parts.append(f" using comments {_comm}")
+        return parts
+
+    def _build_final_input(self, parts: Dict[str, str]) -> str:
+        return "".join(parts.get(part_name, "") for part_name in self.part_order if part_name in parts)
+
+    def _build_truncated_input(self, parts: Dict[str, str]) -> str:
+        """Собирает итоговую строку из компонентов с учетом ограничения на токены.
+        
+        Args:
+            parts: Словарь с компонентами строки (ключ - тип компонента, значение - текст)
+            max_tokens: Максимальное допустимое количество токенов
+        
+        Returns:
+            Собранная строка, уложившаяся в лимит токенов
+        """
+        if self.max_tokens is None:
+            return "".join(parts.values())
+        
+        # Рассчитываем длину каждого компонента в токенах
+        component_lengths = {k: self._tkn.get_token_count(v) for k, v in parts.items()}
+        total_tokens = sum(component_lengths.values())
+        
+        # Если укладываемся в лимит, возвращаем как есть
+        if total_tokens <= self.max_tokens:
+            return "".join(parts.values())
+        # Создаем копию, чтобы не изменять исходный словарь
+        remaining_parts = parts.copy()
+        # Удаляем компоненты по приоритету, пока не уложимся в лимит
+        for component in self.removal_priority:
+            if component in remaining_parts.keys() and total_tokens > self.max_tokens:
+                del remaining_parts[component]
+                total_tokens -= component_lengths[component]
+        
+        # Если после удаления всех необязательных компонентов все равно превышаем лимит,
+        # обрезаем оставшуюся строку
+        if total_tokens > self.max_tokens:
+            self.too_long_inpust += 1
+        
+        return "".join(remaining_parts.values())
+
+    def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
+        """Generate header part of the transformed class code."""
+        _instruction = (self._do_fullcode_instruction(element) if is_full 
+                       else self._do_fragcode_header(element))
+        parts = [
+            _instruction,
+            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
+        ]
+        
+        if element["definition"]["context_before"]:
+            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
+
+        parts += self._add_doc_and_comment(element)
+
+        return {"output": code_snippet, "input": "".join(parts)}
+    
+    def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
+        """Generate body part of the transformed class code."""
+        _instruction = (self._do_fragcode_tail(element) if is_end 
+                       else self._do_fragcode_body(str(frag), element))
+        parts = [
+            _instruction,
+            f" located at file {element["definition"]['location']}"
+        ]
+        
+        parts += self._add_doc_and_comment(element)            
+        return {"input": "".join(parts), "output": code_snippet}
+    
+    def _docstring_generate(self, element: Dict):
+        _doc = self._get_docstring(element)
+        if _doc:
+            _inst = self._do_docsting_instruction(element)
+            _code = element["definition"]["code"]
+            _inst += f" with code: {_code}"
+            self.documenter.append({"output": _doc, "input": _inst})
+
+    def _process_code_fragments(self, element: Dict):
+        
+        if self._tkn and self.fragmenter:
+            _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
+            
+        if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
+            self.code_writer.append(self._header(element, element["definition"]["code"]))
+        else:
+            self.fragmenter.config.chars_per_token = 0.8 * len(element["definition"]["code"]) / _tkn_count 
+            frags = self.fragmenter.split_code(element["definition"])
+            
+            for _idx, frag in enumerate(frags):
+                if _idx == 0:
+                    self.code_writer.append(
+                        self._header(element, frag["code"], is_full=False)
+                    )
+                else:
+                    self.code_writer.append(
+                        self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
+                    )
+
+    def transform(self, element: Dict) -> Dict:
+        """Transform the input element."""
+        raise NotImplementedError
+
+
+class FunctionsTransformer(DsTransformerBase):
+    """Generic code transformer that can handle different element types."""
+    
+    def __init__(self, max_tokens: int = 512, 
+                 tkn: Optional[DsTokenCounter] = None, 
+                 fragmenter: Optional[CodeFragmenter] = None,
+                 deration: float = 0.75):
+        super().__init__(max_tokens, tkn, fragmenter, deration)
 
     def _get_parameters(self, signature):
         parameters = []
@@ -228,160 +348,53 @@ class FunctionsTransformer(DsTransformerBase):
             _inst += f" with code: {_code}"
             self.documenter.append({"output": _doc, "input": _inst})
 
-
     def _restore_cpp_function(self, element: Dict) -> str:
         if element["declaration"] is not None:
             return element["declaration"]["code"]
         else:    
             return generate_signature(element["definition"])
-
-    def _func_transform(self, element: Dict):
+    
+    def transform(self, element: Dict) -> Dict:
         """Transform a single function element."""
         if (element["definition"] is None) or (element["def_cnt"] > 1) or (element["decl_cnt"] > 1):
             return
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         self._docstring_generate(element)
-        if self._tkn and self.fragmenter:
-            _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
-            # print(_tkn_count)
-            
-        if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
-            self.code_writer.append(self._header(element, element["definition"]["code"]))
-        else:
-            self.fragmenter.config.chars_per_token = 0.6 * len(element["definition"]["code"]) / _tkn_count 
-            # print(f"self.fragmenter.config.chars_per_token = {self.fragmenter.config.chars_per_token}")
-            frags = self.fragmenter.split_code(element["definition"])
-            
-            for _idx, frag in enumerate(frags):
-                if _idx == 0:
-                    self.code_writer.append(
-                        self._header(element, frag["code"], is_full=False)
-                    )
-                else:
-                    self.code_writer.append(
-                        self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
-                    )
-    
-    def transform(self, element: Dict) -> Dict:
-        self._func_transform(element)
-    
+        self._process_code_fragments(element)
+
 
 class ClassTransformer(DsTransformerBase):
     """Transformer for class/struct elements that only have definitions."""
     
-    def __init__(self, max_tokens: int = 512, tkn: Optional[DsTokenCounter] = None, fragmenter: Optional[CodeFragmenter] = None):
+    def __init__(self, max_tokens: int = 512, 
+                 tkn: Optional[DsTokenCounter] = None, 
+                 fragmenter: Optional[CodeFragmenter] = None,
+                 deration: float = 0.75):
         super().__init__(max_tokens, tkn, fragmenter)
         self.code_writer = []
         self.documenter = []
     
-    def _do_fullcode_instruction(self, element: Dict) -> str:
-        return generate_instruction(element["definition"], GenerationMode.FULL)
-    
-    def _do_fragcode_header(self, element: Dict) -> str:
-        return generate_instruction(element["definition"], GenerationMode.FIRST_FRAGMENT)
-
-    def _do_fragcode_body(self, idx: str, element: Dict) -> str:
-        return generate_instruction(element["definition"], GenerationMode.NEXT_FRAGMENT, idx)
-
-    def _do_fragcode_tail(self, element: Dict) -> str:
-        return generate_instruction(element["definition"], GenerationMode.LAST_FRAGMENT)    
-
-    def _do_docsting_instruction(self, element: Dict) -> str:
-        return generate_instruction(element["definition"], GenerationMode.DOCSTRING)
-
     def generate_full_name(self, element):
         name = element["type"] + "_" + element["name"]
         if element["parent_type"] != "translation_unit":
             name = element["parent_type"] + "_" + element["parent_name"] + "_" + name
         return name
-
-    def _get_docstring(self, element):
-        if element["definition"]["docstrings"]:
-            return self.clean_docstring('\n'.join([doc['text'] for doc in element["definition"]['docstrings']]))
-        return None
-
-    def _add_doc_and_comment(self, element):
-        parts = []
-        _doc = self._get_docstring(element)
-        if _doc: 
-            parts.append(f" using docstring {_doc}")
-        if element["definition"]["comments"]:
-            _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
-            parts.append(f" using comments {_comm}")
-        return parts
-
-    def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
-        """Generate header part of the transformed class code."""
-        _instruction = (self._do_fullcode_instruction(element) if is_full 
-                       else self._do_fragcode_header(element))
-        parts = [
-            _instruction,
-            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
-        ]
-        
-        if element["definition"]["context_before"]:
-            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
-
-        parts += self._add_doc_and_comment(element)
-
-        return {"output": code_snippet, "input": "".join(parts)}
     
-    def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
-        """Generate body part of the transformed class code."""
-        _instruction = (self._do_fragcode_tail(element) if is_end 
-                       else self._do_fragcode_body(str(frag), element))
-        parts = [
-            _instruction,
-            f" located at file {element["definition"]['location']}"
-        ]
-        
-        parts += self._add_doc_and_comment(element)            
-        return {"input": "".join(parts), "output": code_snippet}
-    
-    def _docstring_generate(self, element: Dict):
-        _doc = self._get_docstring(element)
-        if _doc:
-            _inst = self._do_docsting_instruction(element)
-            _code = element["definition"]["code"]
-            _inst += f" with code: {_code}"
-            self.documenter.append({"output": _doc, "input": _inst})
-
-    def _class_transform(self, element: Dict):
+    def transform(self, element: Dict) -> Dict:
         """Transform a single class element."""
         if element["def_cnt"] > 1:
             return
-            
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         self._docstring_generate(element)
+        self._process_code_fragments(element)
         
-        if self._tkn and self.fragmenter:
-            _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
-            
-        if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
-            self.code_writer.append(self._header(element, element["definition"]["code"]))
-        else:
-            self.fragmenter.config.chars_per_token = 0.8 * len(element["definition"]["code"]) / _tkn_count 
-            frags = self.fragmenter.split_code(element["definition"])
-            
-            for _idx, frag in enumerate(frags):
-                if _idx == 0:
-                    self.code_writer.append(
-                        self._header(element, frag["code"], is_full=False)
-                    )
-                else:
-                    self.code_writer.append(
-                        self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
-                    )
-    
-    def transform(self, element: Dict) -> Dict:
-        self._class_transform(element)
 
 class DatasetTransformer():
     def __init__(self, input_path, repo_name, token_counter: Optional[DsTokenCounter] = None):
         self.dstkn = token_counter
         self.frag = CodeFragmenter()
-        self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag)
-        self.cl = ClassTransformer(tkn = self.dstkn, fragmenter=self.frag)
+        self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag, deration = 0.6)
+        self.cl = ClassTransformer(tkn = self.dstkn, fragmenter=self.frag, deration = 0.8)
         self.input_file = os.path.join(input_path, f"dataset_clang_{repo_name}.jsonl")
         self.output_file_code_ft = os.path.join(input_path, f"dataset_code_finetune_{repo_name}.jsonl")
         self.output_file_doc_ft = os.path.join(input_path, f"dataset_doc_finetune_{repo_name}.jsonl")
@@ -561,13 +574,13 @@ if __name__ == "__main__":
     # # print(ft.transform(element))
     # # print(ft._restore_cpp_function(signature))
     # REPO_NAME = "template_exampl"
-    REPO_NAME = "cppTango-9.3.7"
+    REPO_NAME = "cppTango-9.3.7 copy"
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
-    # dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
+    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
-    # dt.parse_functions()
-    dt.parse_class()
+    dt.parse_functions()
+    # dt.parse_class()
     # dt.save_data()
