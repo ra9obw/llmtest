@@ -145,17 +145,17 @@ class DsTransformerBase:
         return None
 
     def _add_doc_and_comment(self, element):
-        parts = []
+        parts = {}
         _doc = self._get_docstring(element)
         if _doc: 
-            parts.append(f" using docstring {_doc}")
+            parts["docstring"] = f" using docstring {_doc}"
         if element["definition"]["comments"]:
             _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
-            parts.append(f" using comments {_comm}")
+            parts["comments"] = f" using comments {_comm}"
         return parts
 
     def _build_final_input(self, parts: Dict[str, str]) -> str:
-        return "".join(parts.get(part_name, "") for part_name in self.part_order if part_name in parts)
+        return "".join(parts.get(part_name, "") for part_name in self.input_part_order if part_name in parts)
 
     def _build_truncated_input(self, parts: Dict[str, str]) -> str:
         """Собирает итоговую строку из компонентов с учетом ограничения на токены.
@@ -172,6 +172,7 @@ class DsTransformerBase:
         
         # Рассчитываем длину каждого компонента в токенах
         component_lengths = {k: self._tkn.get_token_count(v) for k, v in parts.items()}
+        
         total_tokens = sum(component_lengths.values())
         
         # Если укладываемся в лимит, возвращаем как есть
@@ -189,36 +190,36 @@ class DsTransformerBase:
         # обрезаем оставшуюся строку
         if total_tokens > self.max_tokens:
             self.too_long_inpust += 1
+            print(f"still too long {component_lengths}")
+            print(parts)
         
         return "".join(remaining_parts.values())
 
-    def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
+    def _header(self, element: Dict, is_full: bool = True) -> Dict:
         """Generate header part of the transformed class code."""
         _instruction = (self._do_fullcode_instruction(element) if is_full 
                        else self._do_fragcode_header(element))
-        parts = [
-            _instruction,
-            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
-        ]
+        parts = {"instruction": _instruction,
+        "location": f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
+        }
         
         if element["definition"]["context_before"]:
-            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
+            parts["context_before"] = f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\""
 
-        parts += self._add_doc_and_comment(element)
+        parts.update(self._add_doc_and_comment(element))
 
-        return {"output": code_snippet, "input": "".join(parts)}
+        return self._build_truncated_input(parts)
     
-    def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
+    def _body(self, element: Dict, frag: int, is_end: bool = True) -> Dict:
         """Generate body part of the transformed class code."""
         _instruction = (self._do_fragcode_tail(element) if is_end 
                        else self._do_fragcode_body(str(frag), element))
-        parts = [
-            _instruction,
-            f" located at file {element["definition"]['location']}"
-        ]
+        parts = {"instruction": _instruction,
+            "location": f" located at file {element["definition"]['location']}"
+        }
         
-        parts += self._add_doc_and_comment(element)            
-        return {"input": "".join(parts), "output": code_snippet}
+        parts.update(self._add_doc_and_comment(element))
+        return self._build_truncated_input(parts)
     
     def _docstring_generate(self, element: Dict):
         _doc = self._get_docstring(element)
@@ -234,20 +235,18 @@ class DsTransformerBase:
             _tkn_count = self._tkn.get_token_count(element["definition"]["code"])
             
         if (not self._tkn or not self.fragmenter) or _tkn_count <= self.max_tokens:
-            self.code_writer.append(self._header(element, element["definition"]["code"]))
+            self.code_writer.append({"input": self._header(element), "output": element["definition"]["code"]})
         else:
             self.fragmenter.config.chars_per_token = 0.8 * len(element["definition"]["code"]) / _tkn_count 
             frags = self.fragmenter.split_code(element["definition"])
             
             for _idx, frag in enumerate(frags):
                 if _idx == 0:
-                    self.code_writer.append(
-                        self._header(element, frag["code"], is_full=False)
-                    )
+                    self.code_writer.append( {"input": self._header(element, is_full=False),
+                                             "output": frag["code"]})
                 else:
-                    self.code_writer.append(
-                        self._body(element, frag["code"], _idx, is_end=(_idx == len(frags)-1))
-                    )
+                    self.code_writer.append( {"input": self._body(element, _idx, is_end=(_idx == len(frags)-1)), 
+                                             "output": frag["code"]})
 
     def transform(self, element: Dict) -> Dict:
         """Transform the input element."""
@@ -262,6 +261,7 @@ class FunctionsTransformer(DsTransformerBase):
                  fragmenter: Optional[CodeFragmenter] = None,
                  deration: float = 0.75):
         super().__init__(max_tokens, tkn, fragmenter, deration)
+        self.input_part_order = ['instruction', 'signature', 'location', 'context_before', 'comments', 'docstring']
 
     def _get_parameters(self, signature):
         parameters = []
@@ -298,47 +298,43 @@ class FunctionsTransformer(DsTransformerBase):
         return _doc
 
     def _add_doc_and_comment(self, element):
-        parts = []
+        parts = {}
         _doc = self._get_docstring(element)
-        if _doc: parts.append(f" using docstring {_doc}")
+        if _doc: parts["docstring"] = f" using docstring {_doc}"
         if element["definition"]["comments"]:
             _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
-            parts.append(f" using comments {_comm}")
+            parts["comments"] = f" using comments {_comm}"
         else:
             if element["declaration"] and element["declaration"]["comments"]:
                 _comm = self.clean_comment(''.join(el['text'] for el in element["declaration"]['comments']))
-                parts.append(f" using comments {_comm}")
+                parts["comments"] = f" using comments {_comm}"
         return parts
 
-    def _header(self, element: Dict, code_snippet: str, is_full: bool = True) -> Dict:
+    def _header(self, element: Dict, is_full: bool = True) -> Dict:
         """Generate header part of the transformed code."""
         _instruction = (self._do_fullcode_instruction(element) if is_full 
                        else self._do_fragcode_header(element))
-        parts = [
-            _instruction,
-            f" with signature {self._restore_cpp_function(element)}",
-            f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
-        ]
-        
+        parts = {
+            "instruction": _instruction,
+            "signature": f" with signature {self._restore_cpp_function(element)}",
+            "location": f" located at file: {element["definition"]['location']}, line:{element["definition"]['line']}"
+        }
         if element["definition"]["context_before"]:
-            parts.append(f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\"")
-
-        parts += self._add_doc_and_comment(element)
-
-        return {"output": code_snippet, "input": "".join(parts)}
+            parts["context_before"] = f"\nContext before is: \"{'\n'.join(element["definition"]['context_before'])}\""
+        parts.update(self._add_doc_and_comment(element))
+        return self._build_truncated_input(parts)
     
-    def _body(self, element: Dict, code_snippet: str, frag: int, is_end: bool = True) -> Dict:
+    def _body(self, element: Dict, frag: int, is_end: bool = True) -> Dict:
         """Generate body part of the transformed code."""
         _instruction = (self._do_fragcode_tail(element) if is_end 
                        else self._do_fragcode_body(str(frag), element))
-        parts = [
-            _instruction,
-            f" with signature {self._restore_cpp_function(element)}",
-            f" located at file {element["definition"]['location']}"
-        ]
-        
-        parts += self._add_doc_and_comment(element)            
-        return {"input": "".join(parts), "output": code_snippet}
+        parts = {
+            "instruction":_instruction,
+            "signature":f" with signature {self._restore_cpp_function(element)}",
+            "location":f" located at file {element["definition"]['location']}"
+        }
+        parts.update(self._add_doc_and_comment(element))     
+        return self._build_truncated_input(parts)
     
     def _docstring_generate(self, element: Dict):
         _doc = self._get_docstring(element)
@@ -387,7 +383,7 @@ class ClassTransformer(DsTransformerBase):
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         self._docstring_generate(element)
         self._process_code_fragments(element)
-        
+
 
 class DatasetTransformer():
     def __init__(self, input_path, repo_name, token_counter: Optional[DsTokenCounter] = None):
@@ -395,11 +391,13 @@ class DatasetTransformer():
         self.frag = CodeFragmenter()
         self.ft = FunctionsTransformer(tkn = self.dstkn, fragmenter=self.frag, deration = 0.6)
         self.cl = ClassTransformer(tkn = self.dstkn, fragmenter=self.frag, deration = 0.8)
+        self.enumvar = ClassTransformer(tkn = self.dstkn, fragmenter=self.frag, deration = 0.8)
         self.input_file = os.path.join(input_path, f"dataset_clang_{repo_name}.jsonl")
         self.output_file_code_ft = os.path.join(input_path, f"dataset_code_finetune_{repo_name}.jsonl")
         self.output_file_doc_ft = os.path.join(input_path, f"dataset_doc_finetune_{repo_name}.jsonl")
         self.functions = {}
         self.classes = {}
+        self.enumvars = {}
 
     def _extract_function(self, entry):
         name = self.ft.generate_full_name(entry)
@@ -428,6 +426,14 @@ class DatasetTransformer():
             self.classes[name]["def_cnt"] += 1
             # print(f"class {name} defiend Again!\t{entry["location"]}:{entry["line"]}\t||\t{self.classes[name]["definition"]["name"]}\t{self.classes[name]["definition"]["location"]}:{self.classes[name]["definition"]["line"]}")
 
+    def _extract_enum_and_vars(self, entry):
+        name = self.enumvar.generate_full_name(entry)
+        if name not in self.enumvars.keys():
+            self.enumvars[name] = {"definition": entry, "def_cnt": 1}
+        else:
+            self.enumvars[name]["def_cnt"] += 1
+            print(f"enumvars {name} defiend Again!\t{entry["location"]}:{entry["line"]}\t||\t{self.enumvars[name]["definition"]["name"]}\t{self.enumvars[name]["definition"]["location"]}:{self.enumvars[name]["definition"]["line"]}")
+
     def prepare_lists(self):
         with open(self.input_file, "r", encoding="utf-8") as in_f:
             for line in in_f:
@@ -436,34 +442,52 @@ class DatasetTransformer():
                     self._extract_function(entry)
                 elif entry['type'] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
                     self._extract_class(entry)
+                elif entry['type'] in ("var_decl", "enum_decl"):
+                    self._extract_enum_and_vars(entry)
 
     def parse_functions(self):
-        for name, func in self.functions.items():
+        for _, func in self.functions.items():
             self.ft.transform(func)
-
         print(f" self.ft.code_writer is {len(self.ft.code_writer)}")
         self._stat_subprocess(self.ft.code_writer)
-
         print(f" self.ft.documenter length is {len(self.ft.documenter)}")
         self._stat_subprocess(self.ft.documenter)
 
     def parse_class(self):
-        for name, cls in self.classes.items():
+        for _, cls in self.classes.items():
             self.cl.transform(cls)
-        
         print(f" self.cl.code_writer is {len(self.cl.code_writer)}")
         self._stat_subprocess(self.cl.code_writer)
-
         print(f" self.cl.documenter length is {len(self.cl.documenter)}")
         self._stat_subprocess(self.cl.documenter)
-        
+    
+    def parse_enumvars(self):
+        for _, el in self.enumvars.items():
+            self.enumvar.transform(el)
+        print(f" self.enumvar.code_writer is {len(self.enumvar.code_writer)}")
+        self._stat_subprocess(self.enumvar.code_writer)
+        print(f" self.enumvar.documenter length is {len(self.enumvar.documenter)}")
+        self._stat_subprocess(self.enumvar.documenter)
+    
     def save_data(self):
         with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
             for element in self.ft.code_writer:
                 json_line = json.dumps(element, ensure_ascii=False)
                 f.write(json_line + "\n")
+            for element in self.cl.code_writer:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
+            for element in self.enumvar.code_writer:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
         with open(self.output_file_doc_ft, "w", encoding="utf-8") as f:
             for element in self.ft.documenter:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
+            for element in self.cl.documenter:
+                json_line = json.dumps(element, ensure_ascii=False)
+                f.write(json_line + "\n")
+            for element in self.enumvar.documenter:
                 json_line = json.dumps(element, ensure_ascii=False)
                 f.write(json_line + "\n")
 
@@ -524,8 +548,8 @@ class DatasetTransformer():
 
         # for idx in range(10):
         #     print(dataset[idx], "\n\n")
-        for i in range(2):
-            print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
+        # for i in range(2):
+            # print(["inputs", "outputs"][i], f"mean: {_lens[i].mean()} min: {_lens[i].min()} max: {_lens[i].max()}")
         
         # min_idx = _lens[0].argmin()
         # max_idx = _lens[0].argmax()
@@ -537,8 +561,9 @@ class DatasetTransformer():
         # print(f"min output is {dataset[min_idx]}")
         # print(f"max output is {dataset[max_idx]}")
 
-        self.plot_single_histograms("input", _lens[0])
-        self.plot_single_histograms("output", _lens[1])
+        if len(dataset) > 0: 
+            self.plot_single_histograms("input", _lens[0])
+            self.plot_single_histograms("output", _lens[1])
 
 
 if __name__ == "__main__":
@@ -574,13 +599,14 @@ if __name__ == "__main__":
     # # print(ft.transform(element))
     # # print(ft._restore_cpp_function(signature))
     # REPO_NAME = "template_exampl"
-    REPO_NAME = "cppTango-9.3.7 copy"
+    REPO_NAME = "cppTango-9.3.7"
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
-    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
+    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    # dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
     dt.parse_functions()
-    # dt.parse_class()
-    # dt.save_data()
+    dt.parse_class()
+    dt.parse_enumvars()
+    dt.save_data()

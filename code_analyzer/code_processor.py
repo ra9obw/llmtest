@@ -498,27 +498,27 @@ def main() -> None:
     data_storage = JsonDataStorage(OUTPUT_JSONL)
     extractor = CodeExtractor(REPO_PATH, data_storage=data_storage, skip_files_func=should_skip_file, log_level=3)
 
-    # for root, _, files in os.walk(REPO_PATH):
-    #     for file in files:
-    #         # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
-    #         if file.endswith((".cpp", ".cc", ".cxx", ".c")):
-    #             file_path = Path(root) / file
-    #             print(f"Processing: {file_path}")
-    #             try:
-    #                 extractor.process_file(file_path)
-    #             except Exception as e:
-    #                 print(f"Error processing {file_path}: {e}")
-    #                 traceback.print_exc()
+    for root, _, files in os.walk(REPO_PATH):
+        for file in files:
+            # if file.endswith((".cpp", ".h", ".hpp", "hh", ".cc", ".cxx", ".tpp")):
+            if file.endswith((".cpp", ".cc", ".cxx", ".c")):
+                file_path = Path(root) / file
+                print(f"Processing: {file_path}")
+                try:
+                    extractor.process_file(file_path)
+                except Exception as e:
+                    print(f"Error processing {file_path}: {e}")
+                    traceback.print_exc()
 
-    # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
-    _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
-    # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
+    # # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
+    # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+    # # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
     
-    try:
-        extractor.process_file(_path)
-    except Exception as e:
-        print(f"Error processing {_path}: {e}")
-        traceback.print_exc()
+    # try:
+    #     extractor.process_file(_path)
+    # except Exception as e:
+    #     print(f"Error processing {_path}: {e}")
+    #     traceback.print_exc()
 
     data_storage.print_statistics(unprocessed_stats = extractor.unprocessed_stats )
     data_storage.save_to_file()

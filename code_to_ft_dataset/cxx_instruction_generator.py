@@ -134,6 +134,27 @@ class CxxMethodTransformer(CppInstructionGenerator):
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the method {self.element_name} of the C++ class {self.parent_name}"
 
+class DefaultDeclarationTransformer(CppInstructionGenerator):
+    def __init__(self, element, type_name = None, suffix = None):
+        super().__init__(element)
+        self._type_name = type_name if type_name else "C++ element"
+        self._suffic = f" of the {suffix}" if suffix else ""
+    
+    def _gen_full_instruction(self):
+        
+        return f"Declare the {self._type_name} {self.element_name}{self._suffic}"
+    
+    def _gen_first_fragment(self):
+        return f"Declare the first fragment of the {self._type_name} {self.element_name}{self._suffic}"
+
+    def _gen_next_fragment(self, idx):
+        return f"Declare the next fragment (#{idx}) of the {self._type_name} {self.element_name}{self._suffic}"
+
+    def _gen_last_fragment(self):
+        return f"Declare the last fragment of the {self._type_name} {self.element_name}{self._suffic}"
+        
+    def _gen_docstring(self):
+        return f"Write documentation (docstring) for the {self._type_name} {self.element_name}{self._suffic}"
 
 def create_instruction_generator(element):
     if element["type"] == "function_decl":
@@ -151,6 +172,10 @@ def create_instruction_generator(element):
             return FunctionTransformer(element)
     elif element["type"] in ("class_decl", "struct_decl", "class_template", "class_template_partial_specialization"):
         return ClassTransformer(element)
+    elif element["type"] == "var_decl":
+        return DefaultDeclarationTransformer(element, type_name = "variable", suffix = "Tango Control sources")
+    elif element["type"] == "enum_decl":
+        return DefaultDeclarationTransformer(element, type_name = "enumeration", suffix = "Tango Control sources")
     else:
         raise NotImplementedError(f"Instruction generator for {element['type']} not implemented!")
     
@@ -158,3 +183,24 @@ def create_instruction_generator(element):
 def generate_instruction(element, mode: GenerationMode, idx=0):
     gen = create_instruction_generator(element)
     return gen.generate(mode, idx)
+
+
+if __name__ == "__main__":
+    element = {
+            "type": "var_decl",
+            "name": "calculateSum",
+            "doc": "docstring",
+            "parent_name": ""
+        }
+    
+    modes = [GenerationMode.FULL, GenerationMode.FIRST_FRAGMENT, GenerationMode.NEXT_FRAGMENT, GenerationMode.LAST_FRAGMENT, GenerationMode.DOCSTRING]
+    for md in modes:
+        print(generate_instruction(element, md, 1))
+    element = {
+            "type": "enum_decl",
+            "name": "calculateSum",
+            "doc": "docstring",
+            "parent_name": ""
+        }
+    for md in modes:
+        print(generate_instruction(element, md, 1))
