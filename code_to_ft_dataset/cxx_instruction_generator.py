@@ -1,4 +1,5 @@
 from enum import Enum, auto
+import random
 
 class GenerationMode(Enum):
     FULL = auto()
@@ -39,21 +40,33 @@ class CppInstructionGenerator:
         else:
             return self._gen_next_fragment(idx)
 
+
+instr_list = [
+"Write",
+"Create",
+"Develop",
+"Provide implementation of",
+"Produce"
+]
+def randomInstruction():
+    return random.choice(instr_list)
+
+
 class FunctionTransformer(CppInstructionGenerator):
     def __init__(self, element):
         super().__init__(element)
     
     def _gen_full_instruction(self):
-        return f"Implement the C++ function {self.element_name}"
+        return f"{randomInstruction()} the C++ function {self.element_name}"
     
     def _gen_first_fragment(self):
-        return f"Implement the first fragment of the C++ function {self.element_name}"
+        return f"{randomInstruction()} the first fragment of the C++ function {self.element_name}"
 
     def _gen_next_fragment(self, idx):
-        return f"Implement fragment (#{idx}) of the C++ function {self.element_name}"
+        return f"{randomInstruction()} fragment (#{idx}) of the C++ function {self.element_name}"
 
     def _gen_last_fragment(self):
-        return f"Implement the last fragment of the C++ function {self.element_name}"
+        return f"{randomInstruction()} the last fragment of the C++ function {self.element_name}"
         
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the C++ function {self.element_name}"
@@ -63,16 +76,16 @@ class ClassTransformer(CppInstructionGenerator):
         super().__init__(element)
     
     def _gen_full_instruction(self):
-        return f"Implement the C++ class {self.element_name}"
+        return f"{randomInstruction()} the C++ class {self.element_name}"
     
     def _gen_first_fragment(self):
-        return f"Implement the first fragment of the C++ class {self.element_name}"
+        return f"{randomInstruction()} the first fragment of the C++ class {self.element_name}"
 
     def _gen_next_fragment(self, idx):
-        return f"Implement fragment (#{idx}) of the C++ class {self.element_name}"
+        return f"{randomInstruction()} fragment (#{idx}) of the C++ class {self.element_name}"
 
     def _gen_last_fragment(self):
-        return f"Implement the last fragment of the C++ class {self.element_name}"
+        return f"{randomInstruction()} the last fragment of the C++ class {self.element_name}"
         
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the C++ class {self.element_name}"
@@ -82,16 +95,16 @@ class ConstructorTransformer(CppInstructionGenerator):
         super().__init__(element)
     
     def _gen_full_instruction(self):
-        return f"Implement the constructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the constructor of the C++ class {self.parent_name}"
     
     def _gen_first_fragment(self):
-        return f"Implement the first fragment of the constructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the first fragment of the constructor of the C++ class {self.parent_name}"
 
     def _gen_next_fragment(self, idx):
-        return f"Implement the next fragment (#{idx}) of the constructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the next fragment (#{idx}) of the constructor of the C++ class {self.parent_name}"
 
     def _gen_last_fragment(self):
-        return f"Implement the last fragment of the constructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the last fragment of the constructor of the C++ class {self.parent_name}"
         
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the constructor of the C++ class {self.parent_name}"
@@ -101,16 +114,16 @@ class DestructorTransformer(CppInstructionGenerator):
         super().__init__(element)
     
     def _gen_full_instruction(self):
-        return f"Implement the destructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the destructor of the C++ class {self.parent_name}"
     
     def _gen_first_fragment(self):
-        return f"Implement the first fragment of the destructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the first fragment of the destructor of the C++ class {self.parent_name}"
 
     def _gen_next_fragment(self, idx):
-        return f"Implement the next fragment (#{idx}) of the destructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the next fragment (#{idx}) of the destructor of the C++ class {self.parent_name}"
 
     def _gen_last_fragment(self):
-        return f"Implement the last fragment of the destructor of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the last fragment of the destructor of the C++ class {self.parent_name}"
         
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the destructor of the C++ class {self.parent_name}"
@@ -120,16 +133,16 @@ class CxxMethodTransformer(CppInstructionGenerator):
         super().__init__(element)
     
     def _gen_full_instruction(self):
-        return f"Implement the method {self.element_name} of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the method {self.element_name} of the C++ class {self.parent_name}"
     
     def _gen_first_fragment(self):
-        return f"Implement the first fragment of the method {self.element_name} of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the first fragment of the method {self.element_name} of the C++ class {self.parent_name}"
 
     def _gen_next_fragment(self, idx):
-        return f"Implement the next fragment (#{idx}) of the method {self.element_name} of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the next fragment (#{idx}) of the method {self.element_name} of the C++ class {self.parent_name}"
 
     def _gen_last_fragment(self):
-        return f"Implement the last fragment of the method {self.element_name} of the C++ class {self.parent_name}"
+        return f"{randomInstruction()} the last fragment of the method {self.element_name} of the C++ class {self.parent_name}"
         
     def _gen_docstring(self):
         return f"Write documentation (docstring) for the method {self.element_name} of the C++ class {self.parent_name}"
@@ -187,20 +200,12 @@ def generate_instruction(element, mode: GenerationMode, idx=0):
 
 if __name__ == "__main__":
     element = {
-            "type": "var_decl",
+            "type": "function_decl",
             "name": "calculateSum",
             "doc": "docstring",
             "parent_name": ""
         }
     
     modes = [GenerationMode.FULL, GenerationMode.FIRST_FRAGMENT, GenerationMode.NEXT_FRAGMENT, GenerationMode.LAST_FRAGMENT, GenerationMode.DOCSTRING]
-    for md in modes:
-        print(generate_instruction(element, md, 1))
-    element = {
-            "type": "enum_decl",
-            "name": "calculateSum",
-            "doc": "docstring",
-            "parent_name": ""
-        }
     for md in modes:
         print(generate_instruction(element, md, 1))

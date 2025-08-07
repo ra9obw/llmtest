@@ -64,47 +64,59 @@ class DsTransformerBase:
         self.fragmenter = fragmenter
         self.code_writer = []
         self.documenter = []
-        self.too_long_inpust = 0
+        self.too_long_inp_counter = 0
+        self.skipped_counter = 0
         self.input_part_order = ['instruction', 'location', 'context_before', 'comments', 'docstring']
         self.removal_priority = ['comments', 'context_before', 'location']
 
     def clean_docstring(self, docstring):
+        # Удаляем строки, состоящие только из * или - (рамки)
+        cleaned = re.sub(r'^[*+-]+$', '', docstring, flags=re.MULTILINE)
         # Удаляем начальные /* и */
-        cleaned = re.sub(r'^/\*\*|\*/', '', docstring, flags=re.MULTILINE)
+        cleaned = re.sub(r'^/\*\*|\*/', '', cleaned, flags=re.MULTILINE)
         # Удаляем все * в начале строки (с возможными пробелами перед ними)
         cleaned = re.sub(r'^\s*\* ?', '', cleaned, flags=re.MULTILINE)
+        # Удаляем строки, состоящие только из - (разделители)
+        cleaned = re.sub(r'^-+$', '', cleaned, flags=re.MULTILINE)
+        # Удаляем множественные пробелы (оставляем один)
+        cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
+        # Удаляем пробелы перед и после переносов строк
+        cleaned = re.sub(r' *\n *', '\n', cleaned)
         # Заменяем множественные переносы строк на один
+        cleaned = re.sub(r'\n{2,}', '\n', cleaned)
+        cleaned = re.sub(r'^[*+-]+$', '', cleaned, flags=re.MULTILINE)
         cleaned = re.sub(r'\n{2,}', '\n', cleaned)
         # Удаляем начальные и конечные переносы строк и пробелы
         cleaned = cleaned.strip()
         return cleaned
 
     def clean_comment(self, comment):
-        # Разделяем строку на отдельные строки
         lines = comment.split('\n')
-        
         cleaned_lines = []
+        
         for line in lines:
-            # Удаляем пробелы в начале и конце строки
             stripped_line = line.strip()
-            
-            # Пропускаем пустые строки
-            if not stripped_line:
+            if not stripped_line:  # Пропускаем пустые строки
                 continue
                 
-            # Проверяем, является ли строка разделителем (начинается с // и содержит только -, +, = или пробелы)
+            # Пропускаем разделители и пустые комментарии
             if re.fullmatch(r'//[-+=]+\s*', stripped_line):
                 continue
-                
-            # Проверяем, является ли строка пустым комментарием (//, //-, //+ и т.п. без текста)
             if re.fullmatch(r'//[-+]*\s*', stripped_line):
                 continue
                 
-            # Удаляем "//", "//-", "//+" в начале, если есть, и оставляем полезный текст
+            # Удаляем "//", "//-", "//+" в начале
             useful_part = re.sub(r'^//[-+]*\s*', '', stripped_line)
+            # Удаляем @{ и @}
+            useful_part = re.sub(r'@[{}]', '', useful_part).strip()  # Дополнительно strip() на случай пробелов
+            
+            # Пропускаем строку, если после всех замен она пустая или состоит из пробелов
+            if not useful_part:
+                continue
+                
             cleaned_lines.append(useful_part)
         
-        # Объединяем оставшиеся строки через пробел и удаляем множественные пробелы
+        # Объединяем строки и удаляем лишние пробелы
         cleaned_text = ' '.join(cleaned_lines)
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
         
@@ -148,10 +160,11 @@ class DsTransformerBase:
         parts = {}
         _doc = self._get_docstring(element)
         if _doc: 
-            parts["docstring"] = f" using docstring {_doc}"
+            parts["docstring"] = f" using docstring: \"{_doc}\""
         if element["definition"]["comments"]:
             _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
-            parts["comments"] = f" using comments {_comm}"
+            if _comm: 
+                parts["comments"] = f" using comments: \"{_comm}\""
         return parts
 
     def _build_final_input(self, parts: Dict[str, str]) -> str:
@@ -189,9 +202,8 @@ class DsTransformerBase:
         # Если после удаления всех необязательных компонентов все равно превышаем лимит,
         # обрезаем оставшуюся строку
         if total_tokens > self.max_tokens:
-            self.too_long_inpust += 1
-            print(f"still too long {component_lengths}")
-            print(parts)
+            self.too_long_inp_counter += 1
+            print(f"still too long {component_lengths} {parts["location"]}")
         
         return "".join(remaining_parts.values())
 
@@ -300,14 +312,17 @@ class FunctionsTransformer(DsTransformerBase):
     def _add_doc_and_comment(self, element):
         parts = {}
         _doc = self._get_docstring(element)
-        if _doc: parts["docstring"] = f" using docstring {_doc}"
+        if _doc: 
+            parts["docstring"] = f" using docstring: \"{_doc}\""
         if element["definition"]["comments"]:
             _comm = self.clean_comment(''.join(el['text'] for el in element["definition"]['comments']))
-            parts["comments"] = f" using comments {_comm}"
+            if _comm: 
+                parts["comments"] = f" using comments: \"{_comm}\""
         else:
             if element["declaration"] and element["declaration"]["comments"]:
                 _comm = self.clean_comment(''.join(el['text'] for el in element["declaration"]['comments']))
-                parts["comments"] = f" using comments {_comm}"
+                if _comm: 
+                    parts["comments"] = f" using comments: \"{_comm}\""
         return parts
 
     def _header(self, element: Dict, is_full: bool = True) -> Dict:
@@ -353,6 +368,7 @@ class FunctionsTransformer(DsTransformerBase):
     def transform(self, element: Dict) -> Dict:
         """Transform a single function element."""
         if (element["definition"] is None) or (element["def_cnt"] > 1) or (element["decl_cnt"] > 1):
+            self.skipped_counter += 1
             return
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         self._docstring_generate(element)
@@ -379,6 +395,7 @@ class ClassTransformer(DsTransformerBase):
     def transform(self, element: Dict) -> Dict:
         """Transform a single class element."""
         if element["def_cnt"] > 1:
+            self.skipped_counter += 1
             return
         element["definition"]["code"] = self.clean_cpp_code(element["definition"]["code"])
         self._docstring_generate(element)
@@ -452,6 +469,7 @@ class DatasetTransformer():
         self._stat_subprocess(self.ft.code_writer)
         print(f" self.ft.documenter length is {len(self.ft.documenter)}")
         self._stat_subprocess(self.ft.documenter)
+        print(f"too long inputs: {self.ft.too_long_inp_counter}\t skipped functions: {self.ft.skipped_counter}")
 
     def parse_class(self):
         for _, cls in self.classes.items():
@@ -460,6 +478,7 @@ class DatasetTransformer():
         self._stat_subprocess(self.cl.code_writer)
         print(f" self.cl.documenter length is {len(self.cl.documenter)}")
         self._stat_subprocess(self.cl.documenter)
+        print(f"too long inputs: {self.cl.too_long_inp_counter}\t skipped classes: {self.cl.skipped_counter}")
     
     def parse_enumvars(self):
         for _, el in self.enumvars.items():
@@ -468,6 +487,7 @@ class DatasetTransformer():
         self._stat_subprocess(self.enumvar.code_writer)
         print(f" self.enumvar.documenter length is {len(self.enumvar.documenter)}")
         self._stat_subprocess(self.enumvar.documenter)
+        print(f"too long inputs: {self.enumvar.too_long_inp_counter}\t skipped enum & vars: {self.enumvar.skipped_counter}")
     
     def save_data(self):
         with open(self.output_file_code_ft, "w", encoding="utf-8") as f:
@@ -603,8 +623,8 @@ if __name__ == "__main__":
 # C:\work\pavlenko\llmtest-git\dataset_clang_cppTango-9.3.7.jsonl
 # C:\\work\\pavlenko\\llmtest-git
     # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME)
-    dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
-    # dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
+    # dt = DatasetTransformer(input_path=f"C:\\work\\llm_test", repo_name=REPO_NAME, token_counter=dstkn)
+    dt = DatasetTransformer(input_path=f"C:\\work\\pavlenko\\llmtest-git", repo_name=REPO_NAME, token_counter=dstkn)
     dt.prepare_lists()
     dt.parse_functions()
     dt.parse_class()

@@ -84,14 +84,20 @@ class CodeExtractor:
         # Get the previous significant cursor position to determine search range
         prev_cursor_pos = self.range_locator.get_previous_cursor_position(cursor)
         
-        if not prev_cursor_pos:
-            search_start = 1  # Start from beginning of file if no previous cursor
-        else:
-            search_start = prev_cursor_pos["end_line"]
-        
         # Extract comments between previous cursor and current cursor
         comments = []
         docstrings = []
+
+        if not prev_cursor_pos:
+            # search_start = 1  # Start from beginning of file if no previous cursor
+            # Try to not to extract comment with license
+            return {
+                "comments": comments,
+                "docstrings": docstrings
+            }
+        else:
+            search_start = prev_cursor_pos["end_line"]
+        
         
         # Get all comments in the file
         all_comments = self.range_locator.get_comments_in_range(
@@ -511,9 +517,9 @@ def main() -> None:
                     traceback.print_exc()
 
     # # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\log4tango\\src\\PThreads.cpp"
-    # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
-    # # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\command.h"
-    
+    # # _path = r"C:\\work\\llm_test\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+    # _path = r"C:\\work\\pavlenko\\llmtest-git\\codebase\\cppTango-9.3.7\\cppTango-9.3.7\\cppapi\\server\\seqvec.cpp"
+
     # try:
     #     extractor.process_file(_path)
     # except Exception as e:
