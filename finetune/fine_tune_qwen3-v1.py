@@ -14,7 +14,7 @@ from peft import LoraConfig, get_peft_model, PeftModel
 import torch
 # import bitsandbytes as bnb
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Only use GPU 0
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Only use GPU 0
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # Only use GPU 1
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,garbage_collection_threshold:0.8"
 for i in range(1):
@@ -24,21 +24,23 @@ for i in range(1):
     # MODEL_NAME = "Qwen/Qwen3-8B"  # или локальный путь
     # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-8B-8b-tango-{i}"
 
-    # MODEL_NAME = "Qwen/Qwen3-4B"  # или локальный путь
+    MODEL_NAME = "Qwen/Qwen3-4B"  # или локальный путь
     # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-4B-8b-tango-{i}"
-    # device_map = "auto"
+    OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-4B-8b-tango-test"
+    device_map = "auto"
+    DATASET_PATH = "C:\\work\\llm_test\\dataset_code_finetune_cppTango-9.3.7.jsonl"
 
-    MODEL_NAME = "Qwen/Qwen3-32B"
-    OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-32B-8b-tango-{i}"
-    bound = 36 
-    lr_count = 64
-    device_map = {
-        "model.embed_tokens": "cuda:0",
-        **{f"model.layers.{i}": "cuda:0" for i in range(0, bound)},
-        **{f"model.layers.{i}": "cuda:1" for i in range(bound, lr_count)},
-        "model.norm": "cuda:0",
-        "lm_head": "cuda:0"
-    }
+    # MODEL_NAME = "Qwen/Qwen3-32B"
+    # OUTPUT_DIR = f"C:\\work\\llm_test\\models\\model-qwen3-32B-8b-tango-{i}"
+    # bound = 36 
+    # lr_count = 64
+    # device_map = {
+    #     "model.embed_tokens": "cuda:0",
+    #     **{f"model.layers.{i}": "cuda:0" for i in range(0, bound)},
+    #     **{f"model.layers.{i}": "cuda:1" for i in range(bound, lr_count)},
+    #     "model.norm": "cuda:0",
+    #     "lm_head": "cuda:0"
+    # }
 
     # MODEL_NAME = "Qwen/Qwen2.5-7B"
     # OUTPUT_DIR = "D:\\work\\llm_test312\\fine-tuning\\model"
@@ -59,7 +61,7 @@ for i in range(1):
     # OUTPUT_DIR = "C:\\work\\llm_test\\models\\model-qwen3-14B-8b-tango-0"
 
     # DATASET_PATH = "D:\\work\\llm_test312\\fine-tuning\\dataset.json"
-    DATASET_PATH = "C:\\work\\llm_test\\dataset_lora.jsonl"
+    # DATASET_PATH = "C:\\work\\llm_test\\dataset_lora.jsonl"
 
 
     # Загрузка токенизатора
@@ -107,22 +109,22 @@ for i in range(1):
 
     def tokenize_function(examples):
         # Создаем списки для хранения информации об обрезании
-        input_truncated = []
-        output_truncated = []
+        # input_truncated = []
+        # output_truncated = []
         # Токенизируем все примеры
-        inputs = tokenizer(examples["input"], truncation=True, padding="max_length", max_length=512)
-        outputs = tokenizer(examples["output"], truncation=True, padding="max_length", max_length=512)
-        # Проверяем каждый пример на обрезание
-        for i in range(len(examples["input"])):
-            # Проверяем вход
-            input_tokens_no_trunc = tokenizer(examples["input"][i], truncation=False)
-            input_truncated.append(len(input_tokens_no_trunc["input_ids"]) > 512)
-            # Проверяем выход
-            output_tokens_no_trunc = tokenizer(examples["output"][i], truncation=False)
-            output_truncated.append(len(output_tokens_no_trunc["input_ids"]) > 512)
+        inputs = tokenizer(examples["input"], truncation=True, padding="max_length", max_length=2048)
+        outputs = tokenizer(examples["output"], truncation=True, padding="max_length", max_length=2048)
+        # # Проверяем каждый пример на обрезание
+        # for i in range(len(examples["input"])):
+        #     # Проверяем вход
+        #     input_tokens_no_trunc = tokenizer(examples["input"][i], truncation=False)
+        #     input_truncated.append(len(input_tokens_no_trunc["input_ids"]) > 512)
+        #     # Проверяем выход
+        #     output_tokens_no_trunc = tokenizer(examples["output"][i], truncation=False)
+        #     output_truncated.append(len(output_tokens_no_trunc["input_ids"]) > 512)
         inputs['labels'] = outputs["input_ids"]
-        inputs['input_truncated'] = input_truncated
-        inputs['output_truncated'] = output_truncated
+        # inputs['input_truncated'] = input_truncated
+        # inputs['output_truncated'] = output_truncated
         return inputs
 
     # def tokenize_function(examples):

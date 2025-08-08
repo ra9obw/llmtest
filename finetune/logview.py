@@ -1,0 +1,1 @@
+tensorboard --logdir=C:\work\llm_test\logs --port=6006
